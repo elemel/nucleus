@@ -16,8 +16,8 @@ import random
 pyglet.sprite.Sprite = sprite.Sprite
 
 font = pyglet.font.load(name=config.font_name, size=config.font_size,
-                        dpi=config.font_dpi, bold=True)
-letter_sets = defaultdict(set)
+                        dpi=config.font_dpi, bold=config.font_bold)
+letter_lists = defaultdict(list)
 selection = []
 
 batch = pyglet.graphics.Batch()
@@ -30,13 +30,14 @@ def read_words():
         pass
 
     print 'Reading dictionary...'
-    dictionary = []
+    dictionary = set()
+    lower_alphabet_set = set(config.alphabet.lower())
     with codecs.open(config.dictionary_file, 'r',
                      config.dictionary_encoding) as file_obj:
         for line in file_obj:
             word = line.strip()
-            if all(l in config.alphabet for l in word):
-                dictionary.append(word)
+            if not set(word) - lower_alphabet_set:
+                dictionary.add(word)
 
     print 'Counting letters...'
     letter_counts = defaultdict(int)
@@ -50,7 +51,6 @@ def read_words():
     return dictionary, letter_counts
 
 dictionary, letter_counts = read_words()
-
 def create_world(aabb, gravity=(0., 0.), do_sleep=True):
     lower_bound, upper_bound = aabb
     aabb = b2AABB()
@@ -92,7 +92,6 @@ create_wall(world, half_width=0.5, half_height=10., position=(15., 0.),
 
 class BodyActor(object):
     def __init__(self, body, letter, sprite):
-        self.time = world_time
         self.body = body
         self.letter = letter
         self.sprite = sprite
@@ -102,7 +101,7 @@ class BodyActor(object):
             self.body.GetWorld().DestroyBody(self.body)
             self.body = None
         if self.letter is not None:
-            letter_sets[self.letter].remove(self)
+            letter_lists[self.letter].remove(self)
             self.letter = None
         if self.sprite is not None:
             self.sprite.delete()
@@ -129,7 +128,7 @@ def create_letter(dt):
     sprite = pyglet.sprite.Sprite(glyph, batch=batch, subpixel=True)
     body_actor = BodyActor(body, letter, sprite)
     body.userData = body_actor
-    letter_sets[letter].add(body_actor)
+    letter_lists[letter].append(body_actor)
 
 screen_time = 0.
 world_time = 0.
@@ -243,18 +242,22 @@ def on_key_press(symbol, modifiers):
         if selection:
             selection.pop()
     elif symbol == pyglet.window.key.ENTER:
-        for body_actor in selection:
-            body_actor.destroy()
-        del selection[:]
+        word = u''.join(a.letter for a in selection)
+        if word.lower() in dictionary:
+            for body_actor in selection:
+                body_actor.destroy()
+            del selection[:]
     else:
-        matching_letters = letter_sets[symbol_string].difference(selection)
-        if matching_letters:
-            if selection:
+        letter_list = letter_lists[symbol_string]
+        if not selection:
+            if letter_list:
+                selection.append(letter_list[0])
+        else:
+            matching_letters = set(letter_list).difference(selection)
+            if matching_letters:
                 def key(letter):
                     return (selection[-1].body.position -
                             letter.body.position).LengthSquared()
-            else:
-                key = attrgetter('time')
-            selection.append(min(matching_letters, key=key))
+                selection.append(min(matching_letters, key=key))
 
 pyglet.app.run()
