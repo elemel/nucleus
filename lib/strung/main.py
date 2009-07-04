@@ -11,6 +11,9 @@ from math import *
 import cPickle as pickle
 import random
 
+letter_sets = defaultdict(set)
+string = []
+
 def read_words():
     try:
         with open('strung.pickle') as pickle_file:
@@ -18,23 +21,27 @@ def read_words():
     except:
         pass
 
-    print 'Reading words...'
-    words = [w.strip().upper() for w in
-             codecs.open('/usr/share/dict/swedish', 'r', 'ISO-8859-1')
-             if w.lower() == w]
+    print 'Reading dictionary...'
+    dictionary = []
+    with codecs.open(config.dictionary_file, 'r',
+                     config.dictionary_encoding) as file_obj:
+        for line in file_obj:
+            word = line.strip()
+            if all(l in config.alphabet for l in word):
+                dictionary.append(word)
 
     print 'Counting letters...'
     letter_counts = defaultdict(int)
-    for word in words:
+    for word in dictionary:
         for letter in word:
             letter_counts[letter] += 1
-    letters = sorted(letter_counts)
 
     with open('strung.pickle', 'w') as pickle_file:
-        pickle.dump((words, letters), pickle_file, pickle.HIGHEST_PROTOCOL)
-    return words, letters
+        pickle.dump((dictionary, letter_counts), pickle_file,
+                    pickle.HIGHEST_PROTOCOL)
+    return dictionary, letter_counts
 
-words, letters = read_words()
+dictionary, letter_counts = read_words()
 
 def create_world(aabb, gravity=(0., 0.), do_sleep=True):
     lower_bound, upper_bound = aabb
@@ -64,8 +71,8 @@ def create_wall(world, half_width, half_height, position, angle=0.):
     ground_body = world.CreateBody(ground_body_def)
     ground_shape_def = b2PolygonDef()
     ground_shape_def.SetAsBox(half_width, half_height, position, angle)
-    ground_shape_def.restitution = 0.5
-    ground_shape_def.friction = 0.5
+    ground_shape_def.restitution = config.restitution
+    ground_shape_def.friction = config.friction
     ground_body.CreateShape(ground_shape_def)
 
 create_wall(world, half_width=15., half_height=0.5, position=(0., -10.), angle=0.2)
@@ -83,7 +90,7 @@ class BodyActor(object):
             self.body = None
 
 def create_letter(dt):
-    letter = random.choice(letters)
+    letter = random.choice(config.alphabet)
     body_def = b2BodyDef()
     body_def.position = 10. * (random.random() - 0.5), 30.
     body_def.angle = 2 * pi * random.random()
@@ -91,8 +98,8 @@ def create_letter(dt):
     shape_def = b2CircleDef()
     shape_def.radius = 1. + random.random()
     shape_def.density = 1.
-    shape_def.restitution = 0.5
-    shape_def.friction = 0.5
+    shape_def.restitution = config.restitution
+    shape_def.friction = config.friction
     body.CreateShape(shape_def)
     body.SetMassFromShapes()
     body.linearVelocity = 0., -5.
@@ -101,6 +108,7 @@ def create_letter(dt):
                               anchor_x='center', anchor_y='center')
     body_actor = BodyActor(body, label)
     body.userData = body_actor
+    letter_sets[letter].add(body_actor)
 
 time = 0.
 time_step = 1. / 60.
@@ -113,6 +121,7 @@ def step(dt):
         world.Step(time_step, 10, 8)
         for body_actor in boundary_listener.violators:
             body_actor.destroy()
+            letter_sets[body_actor.label.text].remove(body_actor)
         boundary_listener.violators.clear()
 
 pyglet.clock.schedule_interval(step, time_step)
@@ -129,7 +138,7 @@ def create_unit_circle_vertex_list(vertex_count):
     return pyglet.graphics.vertex_list(len(unit_circle_vertices) // 2,
                                        ('v2f', unit_circle_vertices))
 
-unit_circle_vertex_list = create_unit_circle_vertex_list(64)
+unit_circle_vertex_list = create_unit_circle_vertex_list(config.circle_vertex_count)
 
 def debug_draw():
     glColor3f(0., 1., 0.)
@@ -138,7 +147,7 @@ def debug_draw():
     max_x, max_y = world_aabb.upperBound.tuple()
     vertices = [min_x, min_y, max_x, min_y, max_x, max_y, min_x, max_y,
                 min_x, min_y]
-    pyglet.graphics.draw(len(vertices) // 2, GL_LINE_STRIP, ('v2f', vertices))
+    pyglet.graphics.draw(len(vertices) // 2, GL_LINE_STRIP, ['v2f', vertices])
     for body in world.bodyList:
         glPushMatrix()
         glTranslatef(body.position.x, body.position.y, 0.)
@@ -150,7 +159,7 @@ def debug_draw():
                     vertices.extend(vertex)
                 vertices.extend(shape.vertices[0])
                 pyglet.graphics.draw(len(vertices) // 2, GL_LINE_STRIP,
-                                     ('v2f', vertices))
+                                     ['v2f', vertices])
             elif isinstance(shape, b2CircleShape):
                 glScalef(shape.radius, shape.radius, shape.radius)
                 unit_circle_vertex_list.draw(GL_LINE_STRIP)
@@ -159,10 +168,13 @@ def debug_draw():
 @window.event
 def on_draw():
     window.clear()
-    glColor3f(1., 1., 1.)
     for body in world.bodyList:
         body_actor = body.userData
         if body_actor is not None:
+            if body_actor in string:
+                body_actor.label.color = 255, 255, 0, 255
+            else:
+                body_actor.label.color = 255, 255, 255, 255
             glPushMatrix()
             glTranslatef(body.position.x, body.position.y, 0.)
             if config.rotate_letters:
@@ -201,5 +213,20 @@ def on_resize(width, height):
 @window.event
 def on_show():
     on_resize(window.width, window.height)
+
+@window.event
+def on_key_press(symbol, modifiers):
+    symbol_string = pyglet.window.key.symbol_string(symbol)
+    if symbol == pyglet.window.key.ESCAPE:
+        window.on_close()
+    elif symbol == pyglet.window.key.BACKSPACE:
+        if string:
+            string.pop()
+    elif symbol == pyglet.window.key.ENTER:
+        del string[:]
+    else:
+        matching_letters = letter_sets[symbol_string].difference(string)
+        if matching_letters:
+            string.append(random.choice(list(matching_letters)))
 
 pyglet.app.run()
