@@ -1,6 +1,7 @@
 from __future__ import with_statement
 
 import config
+import sprite
 from Box2D import *
 import pyglet
 from pyglet.gl import *
@@ -8,11 +9,18 @@ import codecs
 from collections import *
 from itertools import *
 from math import *
+from operator import attrgetter
 import cPickle as pickle
 import random
 
+pyglet.sprite.Sprite = sprite.Sprite
+
+font = pyglet.font.load(name=config.font_name, size=config.font_size,
+                        dpi=config.font_dpi, bold=True)
 letter_sets = defaultdict(set)
-string = []
+selection = []
+
+batch = pyglet.graphics.Batch()
 
 def read_words():
     try:
@@ -75,19 +83,30 @@ def create_wall(world, half_width, half_height, position, angle=0.):
     ground_shape_def.friction = config.friction
     ground_body.CreateShape(ground_shape_def)
 
-create_wall(world, half_width=15., half_height=0.5, position=(0., -10.), angle=0.2)
-create_wall(world, half_width=0.5, half_height=10., position=(-15., -5.), angle=0.5)
-create_wall(world, half_width=0.5, half_height=10., position=(15., 0.), angle=-0.2)
+create_wall(world, half_width=15., half_height=0.5, position=(0., -10.),
+            angle=0.2)
+create_wall(world, half_width=0.5, half_height=10., position=(-15., -5.),
+            angle=0.5)
+create_wall(world, half_width=0.5, half_height=10., position=(15., 0.),
+            angle=-0.2)
 
 class BodyActor(object):
-    def __init__(self, body, label):
+    def __init__(self, body, letter, sprite):
+        self.time = world_time
         self.body = body
-        self.label = label
+        self.letter = letter
+        self.sprite = sprite
 
     def destroy(self):
         if self.body is not None:
             self.body.GetWorld().DestroyBody(self.body)
             self.body = None
+        if self.letter is not None:
+            letter_sets[self.letter].remove(self)
+            self.letter = None
+        if self.sprite is not None:
+            self.sprite.delete()
+            self.sprite = None
 
 def create_letter(dt):
     letter = random.choice(config.alphabet)
@@ -104,27 +123,28 @@ def create_letter(dt):
     body.SetMassFromShapes()
     body.linearVelocity = 0., -5.
     body.angularVelocity = 2. * (random.random() - 0.5)
-    label = pyglet.text.Label(letter, bold=True, dpi=200,
-                              anchor_x='center', anchor_y='center')
-    body_actor = BodyActor(body, label)
+    glyph = font.get_glyphs(letter)[0]
+    glyph.anchor_x = glyph.width // 2
+    glyph.anchor_y = glyph.height // 2
+    sprite = pyglet.sprite.Sprite(glyph, batch=batch, subpixel=True)
+    body_actor = BodyActor(body, letter, sprite)
     body.userData = body_actor
     letter_sets[letter].add(body_actor)
 
-time = 0.
-time_step = 1. / 60.
+screen_time = 0.
+world_time = 0.
 
 def step(dt):
-    global time
-    time += dt
-    while time >= time_step:
-        time -= time_step
-        world.Step(time_step, 10, 8)
+    global screen_time, world_time
+    screen_time += dt
+    while world_time + config.time_step <= screen_time:
+        world_time += config.time_step
+        world.Step(config.time_step, 10, 8)
         for body_actor in boundary_listener.violators:
             body_actor.destroy()
-            letter_sets[body_actor.label.text].remove(body_actor)
         boundary_listener.violators.clear()
 
-pyglet.clock.schedule_interval(step, time_step)
+pyglet.clock.schedule_interval(step, config.time_step)
 pyglet.clock.schedule_interval(create_letter, 0.5)
 
 window = pyglet.window.Window(fullscreen=True)
@@ -171,18 +191,15 @@ def on_draw():
     for body in world.bodyList:
         body_actor = body.userData
         if body_actor is not None:
-            if body_actor in string:
-                body_actor.label.color = 255, 255, 0, 255
+            if body_actor in selection:
+                body_actor.sprite.color = 255, 255, 0
             else:
-                body_actor.label.color = 255, 255, 255, 255
-            glPushMatrix()
-            glTranslatef(body.position.x, body.position.y, 0.)
+                body_actor.sprite.color = 255, 255, 255
+            body_actor.sprite.position = body.position.tuple()
             if config.rotate_letters:
-                glRotatef(body.angle * 180. / pi, 0., 0., 1.)
-            scale = 0.05 * body.shapeList[0].radius
-            glScaled(scale, scale, scale)
-            body_actor.label.draw()
-            glPopMatrix()
+                body_actor.sprite.rotation = -body.angle * 180. / pi
+            body_actor.sprite.scale = 0.05 * body.shapeList[0].radius
+    batch.draw()
     if config.debug_draw:
         debug_draw()
 
@@ -217,16 +234,27 @@ def on_show():
 @window.event
 def on_key_press(symbol, modifiers):
     symbol_string = pyglet.window.key.symbol_string(symbol)
+    if symbol_string.startswith('user_key('):
+        user_key = int(symbol_string[9:-1], 16)
+        symbol_string = config.user_keys.get(user_key, symbol_string)
     if symbol == pyglet.window.key.ESCAPE:
         window.on_close()
     elif symbol == pyglet.window.key.BACKSPACE:
-        if string:
-            string.pop()
+        if selection:
+            selection.pop()
     elif symbol == pyglet.window.key.ENTER:
-        del string[:]
+        for body_actor in selection:
+            body_actor.destroy()
+        del selection[:]
     else:
-        matching_letters = letter_sets[symbol_string].difference(string)
+        matching_letters = letter_sets[symbol_string].difference(selection)
         if matching_letters:
-            string.append(random.choice(list(matching_letters)))
+            if selection:
+                def key(letter):
+                    return (selection[-1].body.position -
+                            letter.body.position).LengthSquared()
+            else:
+                key = attrgetter('time')
+            selection.append(min(matching_letters, key=key))
 
 pyglet.app.run()
