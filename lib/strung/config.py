@@ -14,3 +14,4 @@ font_dpi = None
 font_bold = True
 time_step = 1. / 60.
 user_keys = {0x22: u'Å', 0x30: u'Ä', 0x2f: u'Ö'}
+fullscreen = True
