@@ -16,6 +16,42 @@ import random
 # Monkey patch for subpixel option.
 pyglet.sprite.Sprite = sprite.Sprite
 
+class Dictionary(object):
+    def __init__(self):
+        self.alphabet = set(config.alphabet.upper())
+        self._load_words()
+        self._count_letters()
+        self._set_prefixes()
+
+    def _load_words(self):
+        self.words = set()
+        with codecs.open(config.dictionary_file, 'r',
+                         config.dictionary_encoding) as file_obj:
+            for line in file_obj:
+                word = line.strip().upper()
+                if not set(word) - self.alphabet:
+                    self.words.add(word)
+
+    def _count_letters(self):
+        self.letter_counts = defaultdict(int)
+        for word in self.words:
+            for letter in word:
+                self.letter_counts[letter] += 1
+
+    def _set_prefixes(self):
+        self.prefixes = set()
+        for word in self.words:
+            for i in xrange(1, len(word)):
+                self.prefixes.add(word[:i])
+
+def load_dictionary():
+    with open('strung.pickle') as file_obj:
+        return pickle.load(file_obj)
+
+def save_dictionary(dictionary):
+    with open('strung.pickle', 'w') as file_obj:
+        pickle.dump(dictionary, file_obj, pickle.HIGHEST_PROTOCOL)
+
 class MyWindow(pyglet.window.Window):
     def __init__(self, **kwargs):
         super(MyWindow, self).__init__(**kwargs)
@@ -28,12 +64,13 @@ class MyWindow(pyglet.window.Window):
         self.letter_lists = defaultdict(list)
         self.selection = []
         self.batch = pyglet.graphics.Batch()
+        self.next_letters = set()
 
-        self.dictionary, self.letter_counts = self._read_dictionary()
-        self.prefixes = set()
-        for word in self.dictionary:
-            for i in xrange(1, len(word)):
-                self.prefixes.add(word[:i])
+        try:
+            self.dictionary = load_dictionary()
+        except IOError:
+            self.dictionary = Dictionary()
+            save_dictionary(self.dictionary)
 
         self.screen_time = 0.
         self.world_time = 0.
@@ -52,34 +89,6 @@ class MyWindow(pyglet.window.Window):
 
         self.circle_vertex_list = self._create_circle_vertex_list()
         self.camera = Camera(position=(0., 5.), scale=20.)
-
-    def _read_dictionary(self):
-        try:
-            with open('strung.pickle') as pickle_file:
-                return pickle.load(pickle_file)
-        except:
-            pass
-
-        print 'Reading dictionary...'
-        dictionary = set()
-        lower_alphabet_set = set(config.alphabet.lower())
-        with codecs.open(config.dictionary_file, 'r',
-                         config.dictionary_encoding) as file_obj:
-            for line in file_obj:
-                word = line.strip()
-                if not set(word) - lower_alphabet_set:
-                    dictionary.add(word)
-
-        print 'Counting letters...'
-        letter_counts = defaultdict(int)
-        for word in dictionary:
-            for letter in word:
-                letter_counts[letter] += 1
-
-        with open('strung.pickle', 'w') as pickle_file:
-            pickle.dump((dictionary, letter_counts), pickle_file,
-                        pickle.HIGHEST_PROTOCOL)
-        return dictionary, letter_counts
 
     def _create_world(self, aabb, gravity=(0., 0.), do_sleep=True):
         lower_bound, upper_bound = aabb
@@ -100,7 +109,7 @@ class MyWindow(pyglet.window.Window):
                 self.selection.pop()
         elif symbol == pyglet.window.key.ENTER:
             word = u''.join(a.letter for a in self.selection)
-            if word.lower() in self.dictionary:
+            if word in self.dictionary.words:
                 for body_actor in self.selection:
                     self.letter_lists[body_actor.letter].remove(body_actor)
                     body_actor.destroy()
@@ -151,18 +160,21 @@ class MyWindow(pyglet.window.Window):
         self.letter_lists[letter].append(body_actor)
 
     def on_draw(self):
+        self._update_next_letters()
         self.clear()
         for body in self.world.bodyList:
             body_actor = body.userData
             if body_actor is not None:
                 if body_actor in self.selection:
-                    word = u''.join(a.letter for a in self.selection).lower()
-                    if word in self.dictionary:
+                    word = u''.join(a.letter for a in self.selection)
+                    if word in self.dictionary.words:
                         body_actor.sprite.color = 0, 255, 0
-                    elif word in self.prefixes:
+                    elif word in self.dictionary.prefixes:
                         body_actor.sprite.color = 255, 255, 0
                     else:
                         body_actor.sprite.color = 255, 0, 0
+                elif body_actor in self.next_letters:
+                        body_actor.sprite.color = 0, 255, 255
                 else:
                     body_actor.sprite.color = 255, 255, 255
                 body_actor.sprite.position = body.position.tuple()
@@ -172,6 +184,14 @@ class MyWindow(pyglet.window.Window):
         self.batch.draw()
         if config.debug_draw:
             self._debug_draw()
+
+    def _update_next_letters(self):
+        self.next_letters.clear()
+        for letter_list in self.letter_lists.itervalues():
+            for letter in letter_list:
+                if letter not in self.selection:
+                    self.next_letters.add(letter)
+                    break
 
     def _create_circle_vertex_list(self,
                                    vertex_count=config.circle_vertex_count):
