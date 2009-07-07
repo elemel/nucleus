@@ -1,8 +1,8 @@
 # encoding: UTF-8
 
 debug_draw = False
-rotate_letter = True
-scale_letter = True
+rotate_letters = True
+scale_letters = True
 friction = 0.5
 restitution = 0.5
 circle_vertex_count = 64

@@ -67,7 +67,7 @@ class MyWindow(pyglet.window.Window):
         self.font = pyglet.font.load(name=config.font_name,
                                      size=(self.scale * config.font_scale),
                                      bold=config.font_bold)
-        self.letter_lists = defaultdict(list)
+        self.letter_sets = defaultdict(set)
         self.selection = []
         self.batch = pyglet.graphics.Batch()
 
@@ -80,19 +80,17 @@ class MyWindow(pyglet.window.Window):
         self.screen_time = 0.
         self.world_time = 0.
 
-        self.world = self._create_world(aabb=((-100., -100.), (100., 100.)),
-                                        gravity=(0., 0.), do_sleep=True)
+        self.world = self._create_world()
         self.boundary_listener = MyBoundaryListener()
         self.world.SetBoundaryListener(self.boundary_listener)
 
         self.circle_vertex_list = self._create_circle_vertex_list()
 
-    def _create_world(self, aabb, gravity=(0., 0.), do_sleep=True):
-        lower_bound, upper_bound = aabb
+    def _create_world(self):
         aabb = b2AABB()
-        aabb.lowerBound = lower_bound
-        aabb.upperBound = upper_bound
-        return b2World(aabb, gravity, do_sleep)
+        aabb.lowerBound = -100., -100.
+        aabb.upperBound = 100., 100.
+        return b2World(aabb, (0., 0.), True)
 
     def on_key_press(self, symbol, modifiers):
         symbol_string = pyglet.window.key.symbol_string(symbol)
@@ -112,20 +110,21 @@ class MyWindow(pyglet.window.Window):
             else:
                 del self.selection[:]
         else:
-            letter_list = self.letter_lists[symbol_string]
-            if not self.selection:
-                if letter_list:
-                    self.selection.append(letter_list[0])
-            else:
-                matching_letters = set(letter_list).difference(self.selection)
-                if matching_letters:
-                    def key(letter):
-                        return (self.selection[-1].body.position -
-                                letter.body.position).LengthSquared()
-                    self.selection.append(min(matching_letters, key=key))
+            actors = self.letter_sets[symbol_string] - set(self.selection)
+            if actors:
+                self.selection.append(min(actors, key=self.get_actor_key))
+
+    def get_last_position(self):
+        if self.selection:
+            return self.selection[-1].body.position
+        else:
+            return b2Vec2(0., 0.)
+
+    def get_actor_key(self, actor):
+        return (actor.body.position - self.get_last_position()).LengthSquared()
 
     def create_letter(self, dt):
-        letter_count = sum(len(l) for l in self.letter_lists.itervalues())
+        letter_count = sum(len(s) for s in self.letter_sets.itervalues())
         if letter_count >= config.letter_count:
             return
 
@@ -150,33 +149,21 @@ class MyWindow(pyglet.window.Window):
         glyph.anchor_y = glyph.height // 2
         sprite = pyglet.sprite.Sprite(glyph, batch=self.batch,
                                       subpixel=config.subpixel)
-        if config.scale_letter:
+        if config.scale_letters:
             sprite.scale = radius
         actor = Actor(body, letter, sprite)
         body.userData = actor
-        self.letter_lists[letter].append(actor)
+        self.letter_sets[letter].add(actor)
 
     def on_draw(self):
         self.clear()
         word = u''.join(a.letter for a in self.selection)
         next_letters = self.dictionary.get_next_letters(word)
-        selection_set = set(self.selection)
-        if selection_set:
-            next_actors = set()
-            for letter in next_letters:
-                actors = set(self.letter_lists[letter]) - selection_set
-                if actors:
-                    def key(actor):
-                        return (self.selection[-1].body.position -
-                                actor.body.position).LengthSquared()
-                    next_actors.add(min(actors, key=key))
-        else:
-            next_actors = set(self.letter_lists[l][0] for l in next_letters
-                              if self.letter_lists[l])
+        next_actors = self.get_next_actors(next_letters)
         for body in self.world.bodyList:
             actor = body.userData
             if actor is not None:
-                if actor in selection_set:
+                if actor in self.selection:
                     if u'' in next_letters:
                         actor.sprite.color = 0, 255, 0
                     elif next_letters:
@@ -191,11 +178,19 @@ class MyWindow(pyglet.window.Window):
                 screen_x = world_x * self.scale + self.width // 2
                 screen_y = world_y * self.scale + self.height // 2
                 actor.sprite.position = screen_x, screen_y
-                if config.rotate_letter:
+                if config.rotate_letters:
                     actor.sprite.rotation = -body.angle * 180. / pi
         self.batch.draw()
         if config.debug_draw:
             self._debug_draw()
+
+    def get_next_actors(self, next_letters):
+        next_actors = set()
+        for letter in next_letters:
+            actors = self.letter_sets[letter] - set(self.selection)
+            if actors:
+                next_actors.add(min(actors, key=self.get_actor_key))
+        return next_actors
 
     def _create_circle_vertex_list(self,
                                    vertex_count=config.circle_vertex_count):
@@ -251,7 +246,7 @@ class MyWindow(pyglet.window.Window):
     def _destroy_letter(self, actor):
         if actor in self.selection:
             self.selection.remove(actor)
-        self.letter_lists[actor.letter].remove(actor)
+        self.letter_sets[actor.letter].remove(actor)
         self.world.DestroyBody(actor.body)
         actor.sprite.delete()
 
