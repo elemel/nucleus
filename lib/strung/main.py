@@ -63,9 +63,9 @@ class MyWindow(pyglet.window.Window):
         super(MyWindow, self).__init__(**kwargs)
         if self.fullscreen:
             self.set_exclusive_mouse()
+        self.scale = self.height / config.view_height
         self.font = pyglet.font.load(name=config.font_name,
-                                     size=config.font_size,
-                                     dpi=config.font_dpi,
+                                     size=(self.scale * config.font_scale),
                                      bold=config.font_bold)
         self.letter_lists = defaultdict(list)
         self.selection = []
@@ -80,20 +80,12 @@ class MyWindow(pyglet.window.Window):
         self.screen_time = 0.
         self.world_time = 0.
 
-        self.world = self._create_world(aabb=((-50., -25.), (50., 75.)),
-                                        gravity=(0., -10.), do_sleep=True)
+        self.world = self._create_world(aabb=((-100., -100.), (100., 100.)),
+                                        gravity=(0., 0.), do_sleep=True)
         self.boundary_listener = MyBoundaryListener()
         self.world.SetBoundaryListener(self.boundary_listener)
 
-        self._create_wall(half_width=15., half_height=0.5, position=(0., -10.),
-                          angle=0.2)
-        self._create_wall(half_width=0.5, half_height=10.,
-                          position=(-15., -5.), angle=0.5)
-        self._create_wall(half_width=0.5, half_height=10., position=(15., 0.),
-                          angle=-0.2)
-
         self.circle_vertex_list = self._create_circle_vertex_list()
-        self.camera = Camera(position=(0., 5.), scale=20.)
 
     def _create_world(self, aabb, gravity=(0., 0.), do_sleep=True):
         lower_bound, upper_bound = aabb
@@ -115,10 +107,10 @@ class MyWindow(pyglet.window.Window):
         elif symbol == pyglet.window.key.ENTER:
             word = u''.join(a.letter for a in self.selection)
             if u'' in self.dictionary.get_next_letters(word):
-                for actor in self.selection:
-                    self.letter_lists[actor.letter].remove(actor)
-                    actor.destroy()
-            del self.selection[:]
+                for actor in list(self.selection):
+                    self._destroy_letter(actor)
+            else:
+                del self.selection[:]
         else:
             letter_list = self.letter_lists[symbol_string]
             if not self.selection:
@@ -132,38 +124,34 @@ class MyWindow(pyglet.window.Window):
                                 letter.body.position).LengthSquared()
                     self.selection.append(min(matching_letters, key=key))
 
-    def _create_wall(self, half_width, half_height, position, angle=0.):
-        ground_body_def = b2BodyDef()
-        ground_body = self.world.CreateBody(ground_body_def)
-        ground_shape_def = b2PolygonDef()
-        ground_shape_def.SetAsBox(half_width, half_height, position, angle)
-        ground_shape_def.restitution = config.restitution
-        ground_shape_def.friction = config.friction
-        ground_body.CreateShape(ground_shape_def)
-
-    def _create_letter(self, dt):
+    def create_letter(self, dt):
         letter_count = sum(len(l) for l in self.letter_lists.itervalues())
         if letter_count >= config.letter_count:
             return
 
         letter = random.choice(config.alphabet)
         body_def = b2BodyDef()
-        body_def.position = 10. * (random.random() - 0.5), 30.
+        angle = 2. * pi * random.random()
+        body_def.position = 50. * b2Vec2(cos(angle), sin(angle))
         body_def.angle = 2 * pi * random.random()
         body = self.world.CreateBody(body_def)
         shape_def = b2CircleDef()
-        shape_def.radius = 1. + random.random()
+        radius = (config.min_radius +
+                  random.random() * (config.max_radius - config.min_radius))
+        shape_def.radius = radius
         shape_def.density = 1.
         shape_def.restitution = config.restitution
         shape_def.friction = config.friction
         body.CreateShape(shape_def)
         body.SetMassFromShapes()
-        body.linearVelocity = 0., -5.
         body.angularVelocity = 2. * (random.random() - 0.5)
         glyph = self.font.get_glyphs(letter)[0]
         glyph.anchor_x = glyph.width // 2
         glyph.anchor_y = glyph.height // 2
-        sprite = pyglet.sprite.Sprite(glyph, batch=self.batch, subpixel=True)
+        sprite = pyglet.sprite.Sprite(glyph, batch=self.batch,
+                                      subpixel=config.subpixel)
+        if config.scale_letter:
+            sprite.scale = radius
         actor = Actor(body, letter, sprite)
         body.userData = actor
         self.letter_lists[letter].append(actor)
@@ -199,10 +187,12 @@ class MyWindow(pyglet.window.Window):
                     actor.sprite.color = 0, 255, 255
                 else:
                     actor.sprite.color = 255, 255, 255
-                actor.sprite.position = body.position.tuple()
-                if config.rotate_letters:
+                world_x, world_y = body.position.tuple()
+                screen_x = world_x * self.scale + self.width // 2
+                screen_y = world_y * self.scale + self.height // 2
+                actor.sprite.position = screen_x, screen_y
+                if config.rotate_letter:
                     actor.sprite.rotation = -body.angle * 180. / pi
-                actor.sprite.scale = 0.05 * body.shapeList[0].radius
         self.batch.draw()
         if config.debug_draw:
             self._debug_draw()
@@ -218,13 +208,16 @@ class MyWindow(pyglet.window.Window):
 
     def _debug_draw(self):
         glColor3f(0., 1., 0.)
-        world_aabb = world.GetWorldAABB()
+        glPushMatrix()
+        glTranslatef(float(self.width // 2), float(self.height // 2), 0.)
+        glScalef(self.scale, self.scale, self.scale)
+        world_aabb = self.world.GetWorldAABB()
         min_x, min_y = world_aabb.lowerBound.tuple()
         max_x, max_y = world_aabb.upperBound.tuple()
         vertices = [min_x, min_y, max_x, min_y, max_x, max_y, min_x, max_y,
                     min_x, min_y]
         pyglet.graphics.draw(len(vertices) // 2, GL_LINE_STRIP, ['v2f', vertices])
-        for body in world.bodyList:
+        for body in self.world.bodyList:
             glPushMatrix()
             glTranslatef(body.position.x, body.position.y, 0.)
             glRotatef(body.angle * 180. / pi, 0., 0., 1.)
@@ -240,22 +233,27 @@ class MyWindow(pyglet.window.Window):
                     glScalef(shape.radius, shape.radius, shape.radius)
                     self.circle_vertex_list.draw(GL_LINE_STRIP)
             glPopMatrix()
+        glPopMatrix()
 
-    def on_resize(self, width, height):
-        self.camera.update(width, height)
-
-    def on_show(self):
-        self.on_resize(self.width, self.height)
-
-    def _step(self, dt):
+    def step(self, dt):
         self.screen_time += dt
         while self.world_time + config.time_step <= self.screen_time:
             self.world_time += config.time_step
+            for body in self.world.bodyList:
+                force = -(config.spring_constant * body.GetWorldCenter() +
+                          config.damping * body.GetLinearVelocity())
+                body.ApplyForce(force, body.GetWorldCenter())
             self.world.Step(config.time_step, 10, 8)
             for actor in self.boundary_listener.violators:
-                self.letter_lists[actor.letter].remove(actor)
-                actor.destroy()
+                self._destroy_letter(actor)
             self.boundary_listener.violators.clear()
+
+    def _destroy_letter(self, actor):
+        if actor in self.selection:
+            self.selection.remove(actor)
+        self.letter_lists[actor.letter].remove(actor)
+        self.world.DestroyBody(actor.body)
+        actor.sprite.delete()
 
 class MyBoundaryListener(b2BoundaryListener):
     def __init__(self):
@@ -273,36 +271,11 @@ class Actor(object):
         self.letter = letter
         self.sprite = sprite
 
-    def destroy(self):
-        if self.body is not None:
-            self.body.GetWorld().DestroyBody(self.body)
-            self.body = None
-        if self.sprite is not None:
-            self.sprite.delete()
-            self.sprite = None
-
-class Camera(object):
-    def __init__(self, position=(0., 0.), scale=1., rotation=0.):
-        self.position = position
-        self.scale = scale
-        self.rotation = rotation
-
-    def update(self, width, height):
-        glMatrixMode(GL_PROJECTION)
-        glLoadIdentity()
-        aspect = float(width) / float(height)
-        gluOrtho2D(-self.scale * aspect, self.scale * aspect,
-                   -self.scale, self.scale)
-        glMatrixMode(GL_MODELVIEW)
-        glLoadIdentity()
-        x, y = self.position
-        gluLookAt(x, y, 1., x, y, -1.,
-                  sin(self.rotation), cos(self.rotation), 0.)
-
 def main():
     window = MyWindow(fullscreen=config.fullscreen)
-    pyglet.clock.schedule_interval(window._step, config.time_step)
-    pyglet.clock.schedule_interval(window._create_letter, 0.1)
+    pyglet.clock.schedule_interval(window.step, config.time_step)
+    pyglet.clock.schedule_interval(window.create_letter,
+                                   config.creation_interval)
     pyglet.app.run()
     
 if __name__ == '__main__':
