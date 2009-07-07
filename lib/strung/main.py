@@ -130,20 +130,20 @@ class MyWindow(pyglet.window.Window):
 
         letter = random.choice(config.alphabet)
         body_def = b2BodyDef()
-        angle = 2. * pi * random.random()
-        body_def.position = 50. * b2Vec2(cos(angle), sin(angle))
+        creation_angle = 2. * pi * random.random()
+        body_def.position = (config.creation_distance *
+                             b2Vec2(cos(creation_angle), sin(creation_angle)))
         body_def.angle = 2 * pi * random.random()
         body = self.world.CreateBody(body_def)
         shape_def = b2CircleDef()
         radius = (config.min_radius +
                   random.random() * (config.max_radius - config.min_radius))
         shape_def.radius = radius
-        shape_def.density = 1.
+        shape_def.density = config.density
         shape_def.restitution = config.restitution
         shape_def.friction = config.friction
         body.CreateShape(shape_def)
         body.SetMassFromShapes()
-        body.angularVelocity = 2. * (random.random() - 0.5)
         glyph = self.font.get_glyphs(letter)[0]
         glyph.anchor_x = glyph.width // 2
         glyph.anchor_y = glyph.height // 2
@@ -156,24 +156,29 @@ class MyWindow(pyglet.window.Window):
         self.letter_sets[letter].add(actor)
 
     def on_draw(self):
+        glClearColor(*(tuple(config.background_color) + (0,)))
         self.clear()
         word = u''.join(a.letter for a in self.selection)
         next_letters = self.dictionary.get_next_letters(word)
-        next_actors = self.get_next_actors(next_letters)
+        next_actors = set()
+        for letter in next_letters:
+            actors = self.letter_sets[letter] - set(self.selection)
+            if actors:
+                next_actors.add(min(actors, key=self.get_actor_key))
         for body in self.world.bodyList:
             actor = body.userData
             if actor is not None:
                 if actor in self.selection:
                     if u'' in next_letters:
-                        actor.sprite.color = 0, 255, 0
+                        actor.sprite.color = config.word_color
                     elif next_letters:
-                        actor.sprite.color = 255, 255, 0
+                        actor.sprite.color = config.prefix_color
                     else:
-                        actor.sprite.color = 255, 0, 0
+                        actor.sprite.color = config.error_color
                 elif actor in next_actors:
-                    actor.sprite.color = 0, 255, 255
+                    actor.sprite.color = config.hint_color
                 else:
-                    actor.sprite.color = 255, 255, 255
+                    actor.sprite.color = config.color
                 world_x, world_y = body.position.tuple()
                 screen_x = world_x * self.scale + self.width // 2
                 screen_y = world_y * self.scale + self.height // 2
@@ -183,14 +188,6 @@ class MyWindow(pyglet.window.Window):
         self.batch.draw()
         if config.debug_draw:
             self._debug_draw()
-
-    def get_next_actors(self, next_letters):
-        next_actors = set()
-        for letter in next_letters:
-            actors = self.letter_sets[letter] - set(self.selection)
-            if actors:
-                next_actors.add(min(actors, key=self.get_actor_key))
-        return next_actors
 
     def _create_circle_vertex_list(self,
                                    vertex_count=config.circle_vertex_count):
@@ -202,16 +199,17 @@ class MyWindow(pyglet.window.Window):
                                            ('v2f', unit_circle_vertices))
 
     def _debug_draw(self):
-        glColor3f(0., 1., 0.)
+        glColor3ub(*config.debug_color)
         glPushMatrix()
         glTranslatef(float(self.width // 2), float(self.height // 2), 0.)
         glScalef(self.scale, self.scale, self.scale)
         world_aabb = self.world.GetWorldAABB()
         min_x, min_y = world_aabb.lowerBound.tuple()
         max_x, max_y = world_aabb.upperBound.tuple()
-        vertices = [min_x, min_y, max_x, min_y, max_x, max_y, min_x, max_y,
-                    min_x, min_y]
-        pyglet.graphics.draw(len(vertices) // 2, GL_LINE_STRIP, ['v2f', vertices])
+        vertices = (min_x, min_y, max_x, min_y, max_x, max_y, min_x, max_y,
+                    min_x, min_y)
+        pyglet.graphics.draw(len(vertices) // 2, GL_LINE_STRIP,
+                             ('v2f', vertices))
         for body in self.world.bodyList:
             glPushMatrix()
             glTranslatef(body.position.x, body.position.y, 0.)
@@ -223,7 +221,7 @@ class MyWindow(pyglet.window.Window):
                         vertices.extend(vertex)
                     vertices.extend(shape.vertices[0])
                     pyglet.graphics.draw(len(vertices) // 2, GL_LINE_STRIP,
-                                         ['v2f', vertices])
+                                         ('v2f', vertices))
                 elif isinstance(shape, b2CircleShape):
                     glScalef(shape.radius, shape.radius, shape.radius)
                     self.circle_vertex_list.draw(GL_LINE_STRIP)
