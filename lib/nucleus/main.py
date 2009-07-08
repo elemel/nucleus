@@ -51,11 +51,11 @@ def parse_dictionary():
     return Dictionary(read_words())
 
 def unpickle_dictionary():
-    with open('strung.pickle') as file_obj:
+    with open('nucleus.pickle') as file_obj:
         return pickle.load(file_obj)
 
 def pickle_dictionary(dictionary):
-    with open('strung.pickle', 'w') as file_obj:
+    with open('nucleus.pickle', 'w') as file_obj:
         pickle.dump(dictionary, file_obj, pickle.HIGHEST_PROTOCOL)
 
 class MyWindow(pyglet.window.Window):
