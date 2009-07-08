@@ -175,7 +175,7 @@ class MyWindow(pyglet.window.Window):
                         actor.sprite.color = config.prefix_color
                     else:
                         actor.sprite.color = config.error_color
-                elif actor in next_actors:
+                elif config.hint and actor in next_actors:
                     actor.sprite.color = config.hint_color
                 else:
                     actor.sprite.color = config.color
