@@ -70,6 +70,9 @@ class MyWindow(pyglet.window.Window):
         self.letter_sets = defaultdict(set)
         self.selection = []
         self.batch = pyglet.graphics.Batch()
+        self.score = 0
+        self.score_label = pyglet.text.Label('SCORE %d' % self.score,
+                                             font_size=self.scale, bold=True)
 
         try:
             self.dictionary = unpickle_dictionary()
@@ -79,6 +82,9 @@ class MyWindow(pyglet.window.Window):
 
         self.screen_time = 0.
         self.world_time = 0.
+        self.time_label = pyglet.text.Label('TIME ' + self.format_time(),
+                                             font_size=self.scale, bold=True,
+                                             anchor_x='right')
 
         self.world = self._create_world()
         self.boundary_listener = MyBoundaryListener()
@@ -91,6 +97,9 @@ class MyWindow(pyglet.window.Window):
         aabb.lowerBound = -100., -100.
         aabb.upperBound = 100., 100.
         return b2World(aabb, (0., 0.), True)
+
+    def format_time(self):
+        return '%d:%02d' % divmod(int(config.time - self.world_time), 60)
 
     def on_key_press(self, symbol, modifiers):
         symbol_string = pyglet.window.key.symbol_string(symbol)
@@ -105,8 +114,23 @@ class MyWindow(pyglet.window.Window):
         elif symbol == pyglet.window.key.ENTER:
             word = u''.join(a.letter for a in self.selection)
             if u'' in self.dictionary.get_next_letters(word):
+                print word
+                multiplier = 1
+                score = len(self.selection)
+                for i, actor in enumerate(self.selection):
+                    for other in self.selection[i + 1:]:
+                        if ((actor.body.GetWorldCenter() -
+                             other.body.GetWorldCenter()).LengthSquared()
+                             < (actor.radius + other.radius + 0.5) ** 2):
+                             multiplier += 1
                 for actor in list(self.selection):
                     self._destroy_letter(actor)
+                actors = list(chain(*self.letter_sets.values()))
+                actors.sort(key=self.get_actor_key)
+                for actor in actors[:multiplier]:
+                    self._destroy_letter(actor)
+                self.score += multiplier * score
+                self.score_label.text = 'SCORE %d' % self.score
             else:
                 del self.selection[:]
         else:
@@ -124,7 +148,7 @@ class MyWindow(pyglet.window.Window):
         return (actor.body.position - self.get_last_position()).LengthSquared()
 
     def create_letter(self, dt):
-        letter_count = sum(len(s) for s in self.letter_sets.itervalues())
+        letter_count = sum(len(s) for s in self.letter_sets.values())
         if letter_count >= config.letter_count:
             return
 
@@ -151,7 +175,7 @@ class MyWindow(pyglet.window.Window):
                                       subpixel=config.subpixel)
         if config.scale_letters:
             sprite.scale = radius
-        actor = Actor(body, letter, sprite)
+        actor = Actor(body, letter, sprite, radius)
         body.userData = actor
         self.letter_sets[letter].add(actor)
 
@@ -188,6 +212,9 @@ class MyWindow(pyglet.window.Window):
         self.batch.draw()
         if config.debug_draw:
             self._debug_draw()
+        self.score_label.draw()
+        self.time_label.x = self.width
+        self.time_label.draw()
 
     def _create_circle_vertex_list(self,
                                    vertex_count=config.circle_vertex_count):
@@ -240,6 +267,11 @@ class MyWindow(pyglet.window.Window):
             for actor in self.boundary_listener.violators:
                 self._destroy_letter(actor)
             self.boundary_listener.violators.clear()
+        if self.world_time < config.time:
+            self.time_label.text = 'TIME ' + self.format_time()
+        else:
+            print 'SCORE %d' % self.score
+            self.on_close()
 
     def _destroy_letter(self, actor):
         if actor in self.selection:
@@ -259,10 +291,11 @@ class MyBoundaryListener(b2BoundaryListener):
             self.violators.add(actor)
 
 class Actor(object):
-    def __init__(self, body, letter, sprite):
+    def __init__(self, body, letter, sprite, radius):
         self.body = body
         self.letter = letter
         self.sprite = sprite
+        self.radius = radius
 
 def main():
     window = MyWindow(fullscreen=config.fullscreen)
