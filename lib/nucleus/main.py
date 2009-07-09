@@ -74,10 +74,12 @@ class MyWindow(pyglet.window.Window):
         super(MyWindow, self).__init__(**kwargs)
         if self.fullscreen:
             self.set_exclusive_mouse()
+        self.closing = False
         self.scale = self.height / config.view_height
         self.font = pyglet.font.load(name=config.font_name,
                                      size=(self.scale * config.font_scale),
                                      bold=config.font_bold)
+        self.actors = set()
         self.letter_sets = defaultdict(set)
         self.selection = []
         self.batch = pyglet.graphics.Batch()
@@ -165,7 +167,7 @@ class MyWindow(pyglet.window.Window):
 
     def create_letter(self, dt):
         letter_count = sum(len(s) for s in self.letter_sets.values())
-        if letter_count >= config.letter_count:
+        if self.closing or letter_count >= config.letter_count:
             return
 
         letter = self.dictionary.random_letter()
@@ -193,6 +195,7 @@ class MyWindow(pyglet.window.Window):
             sprite.scale = radius
         actor = Actor(body, letter, sprite, radius)
         body.userData = actor
+        self.actors.add(actor)
         self.letter_sets[letter].add(actor)
 
     def on_draw(self):
@@ -293,12 +296,17 @@ class MyWindow(pyglet.window.Window):
             for actor in self.boundary_listener.violators:
                 self._destroy_actor(actor)
             self.boundary_listener.violators.clear()
-        if self.world_time < config.time:
-            self.time_label.text = '%s %s' % (config.time_label,
-                                              self.format_time())
-        else:
-            print u'%s %d' % (config.score_label, self.score)
+        self.time_label.text = '%s %s' % (config.time_label,
+                                          self.format_time())        
+        if self.closing and not self.actors:
             self.on_close()
+
+    def clear_letters(self, dt):
+        self.closing = True
+        for body in self.world.bodyList:
+            actor = body.userData
+            if actor is not None:
+                self._clear_letter(actor)
 
     def _clear_letter(self, actor):
         if actor in self.selection:
@@ -311,6 +319,7 @@ class MyWindow(pyglet.window.Window):
         self._clear_letter(actor)
         self.world.DestroyBody(actor.body)
         actor.sprite.delete()
+        self.actors.remove(actor)
 
 class MyBoundaryListener(b2BoundaryListener):
     def __init__(self):
@@ -334,6 +343,7 @@ def main():
     pyglet.clock.schedule_interval(window.step, config.time_step)
     pyglet.clock.schedule_interval(window.create_letter,
                                    config.creation_interval)
+    pyglet.clock.schedule_once(window.clear_letters, config.time)
     pyglet.app.run()
     
 if __name__ == '__main__':
