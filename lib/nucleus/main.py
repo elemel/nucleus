@@ -30,7 +30,7 @@ class Dictionary(object):
             tree = tree.setdefault(letter, {})
         tree[u''] = None
 
-    def get_next_letters(self, prefix):
+    def complete(self, prefix):
         tree = self.letter_tree
         for letter in prefix:
             if letter in tree:
@@ -119,7 +119,7 @@ class MyWindow(pyglet.window.Window):
                 self.selection.pop()
         elif symbol == pyglet.window.key.ENTER:
             word = u''.join(a.letter for a in self.selection)
-            if u'' in self.dictionary.get_next_letters(word):
+            if u'' in self.dictionary.complete(word):
                 print word
                 multiplier = 1
                 score = len(self.selection)
@@ -190,7 +190,7 @@ class MyWindow(pyglet.window.Window):
         glClearColor(*(tuple(config.background_color) + (0,)))
         self.clear()
         word = u''.join(a.letter for a in self.selection)
-        next_letters = self.dictionary.get_next_letters(word)
+        next_letters = self.dictionary.complete(word)
         next_actors = set()
         for letter in next_letters:
             actors = self.letter_sets[letter] - set(self.selection)
