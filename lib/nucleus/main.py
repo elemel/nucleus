@@ -143,7 +143,7 @@ class MyWindow(pyglet.window.Window):
                              < (actor.radius + other.radius + 0.5) ** 2):
                              multiplier += 1
                 for actor in list(self.selection):
-                    self._destroy_letter(actor)
+                    self._clear_letter(actor)
                 self.score += multiplier * score
                 self.score_label.text = u'%s %d' % (config.score_label,
                                                     self.score)
@@ -207,7 +207,9 @@ class MyWindow(pyglet.window.Window):
         for body in self.world.bodyList:
             actor = body.userData
             if actor is not None:
-                if actor in self.selection:
+                if actor.letter is None:
+                    actor.sprite.color = config.destroy_color
+                elif actor in self.selection:
                     if u'' in next_letters:
                         actor.sprite.color = config.word_color
                     elif next_letters:
@@ -275,12 +277,21 @@ class MyWindow(pyglet.window.Window):
         while self.world_time + config.time_step <= self.screen_time:
             self.world_time += config.time_step
             for body in self.world.bodyList:
-                force = -(config.spring_constant * body.GetWorldCenter() +
-                          config.damping * body.GetLinearVelocity())
-                body.ApplyForce(force, body.GetWorldCenter())
+                actor = body.userData
+                if actor is not None:
+                    if actor.letter is not None:
+                        force = -(config.spring_constant *
+                                  body.GetWorldCenter() +
+                                  config.damping * body.GetLinearVelocity())
+                    else:
+                        direction = body.GetWorldCenter().copy()
+                        direction.Normalize()
+                        force = (config.destroy_force * direction -
+                                config.damping * body.GetLinearVelocity())
+                    body.ApplyForce(force, body.GetWorldCenter())
             self.world.Step(config.time_step, 10, 8)
             for actor in self.boundary_listener.violators:
-                self._destroy_letter(actor)
+                self._destroy_actor(actor)
             self.boundary_listener.violators.clear()
         if self.world_time < config.time:
             self.time_label.text = '%s %s' % (config.time_label,
@@ -289,10 +300,15 @@ class MyWindow(pyglet.window.Window):
             print u'%s %d' % (config.score_label, self.score)
             self.on_close()
 
-    def _destroy_letter(self, actor):
+    def _clear_letter(self, actor):
         if actor in self.selection:
             self.selection.remove(actor)
-        self.letter_sets[actor.letter].remove(actor)
+        if actor.letter is not None:
+            self.letter_sets[actor.letter].remove(actor)
+            actor.letter = None
+
+    def _destroy_actor(self, actor):
+        self._clear_letter(actor)
         self.world.DestroyBody(actor.body)
         actor.sprite.delete()
 

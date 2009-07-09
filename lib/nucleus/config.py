@@ -12,6 +12,7 @@ restitution = 0.
 density = 1.
 spring_constant = 10.
 damping = 5.
+destroy_force = 500.
 
 # Presentation.
 rotate_letters = True
@@ -51,6 +52,7 @@ hint_color = 0, 255, 255
 prefix_color = 255, 255, 0
 word_color = 0, 255, 0
 error_color = 255, 0, 0
+destroy_color = 255, 0, 255
 
 # Labels.
 score_label = u'POÄNG'
