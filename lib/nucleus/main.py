@@ -105,6 +105,10 @@ class MyWindow(pyglet.window.Window):
 
         self.circle_vertex_list = self._create_circle_vertex_list()
 
+        clear_color = [float(c) / 255. for c in config.background_color]
+        clear_color.append(0.)
+        glClearColor(*clear_color)
+
     def _create_world(self):
         aabb = b2AABB()
         aabb.lowerBound = -config.world_radius, -config.world_radius
@@ -196,7 +200,6 @@ class MyWindow(pyglet.window.Window):
         self.letter_sets[letter].add(actor)
 
     def on_draw(self):
-        glClearColor(*(tuple(config.background_color) + (0,)))
         self.clear()
         word = u''.join(a.letter for a in self.selection)
         next_letters = self.dictionary.complete(word)
