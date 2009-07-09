@@ -39,24 +39,26 @@ class Dictionary(object):
                 return set()
         return set(tree)
 
-def parse_dictionary():
-    def read_words():
-        alphabet = set(config.alphabet)
-        with codecs.open(config.dictionary_file, 'r',
-                         config.dictionary_encoding) as file_obj:
-            for line in file_obj:
-                word = line.strip().upper()
-                if not set(word) - alphabet:
-                    yield word
-    return Dictionary(read_words())
+    @staticmethod
+    def parse():
+        def read_words():
+            alphabet = set(config.alphabet)
+            with codecs.open(config.dictionary_file, 'r',
+                             config.dictionary_encoding) as file_obj:
+                for line in file_obj:
+                    word = line.strip().upper()
+                    if not set(word) - alphabet:
+                        yield word
+        return Dictionary(read_words())
 
-def unpickle_dictionary():
-    with open(config.pickle_file) as file_obj:
-        return pickle.load(file_obj)
+    @staticmethod
+    def unpickle():
+        with open(config.pickle_file) as file_obj:
+            return pickle.load(file_obj)
 
-def pickle_dictionary(dictionary):
-    with open(config.pickle_file, 'w') as file_obj:
-        pickle.dump(dictionary, file_obj, pickle.HIGHEST_PROTOCOL)
+    def pickle(self):
+        with open(config.pickle_file, 'w') as file_obj:
+            pickle.dump(dictionary, file_obj, pickle.HIGHEST_PROTOCOL)
 
 class MyWindow(pyglet.window.Window):
     def __init__(self, **kwargs):
@@ -76,10 +78,10 @@ class MyWindow(pyglet.window.Window):
                                              font_size=self.scale, bold=True)
 
         try:
-            self.dictionary = unpickle_dictionary()
+            self.dictionary = Dictionary.unpickle()
         except IOError:
-            self.dictionary = parse_dictionary()
-            pickle_dictionary(self.dictionary)
+            self.dictionary = Dictionary.parse()
+            self.dictionary.pickle()
 
         self.screen_time = 0.
         self.world_time = 0.
