@@ -23,7 +23,7 @@ view_height = 25.
 
 # Gameplay.
 letter_count = 46
-hint = True
+hint = False
 time = 90.0
 creation_distance = 30.
 creation_interval = 0.1

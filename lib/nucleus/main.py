@@ -144,10 +144,6 @@ class MyWindow(pyglet.window.Window):
                              multiplier += 1
                 for actor in list(self.selection):
                     self._destroy_letter(actor)
-                actors = list(chain(*self.letter_sets.values()))
-                actors.sort(key=self.get_actor_key)
-                for actor in actors[:multiplier]:
-                    self._destroy_letter(actor)
                 self.score += multiplier * score
                 self.score_label.text = u'%s %d' % (config.score_label,
                                                     self.score)
