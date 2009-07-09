@@ -39,6 +39,15 @@ class Dictionary(object):
                 return set()
         return set(tree)
 
+    def random_letter(self):
+        total_count = sum(self.letter_counts.values())
+        random_count = random.randrange(total_count)
+        for letter, count in self.letter_counts.items():
+            if random_count < count:
+                return letter
+            random_count -= count
+        return None
+
     @staticmethod
     def parse():
         def read_words():
@@ -159,7 +168,7 @@ class MyWindow(pyglet.window.Window):
         if letter_count >= config.letter_count:
             return
 
-        letter = random.choice(config.alphabet)
+        letter = self.dictionary.random_letter()
         body_def = b2BodyDef()
         creation_angle = 2. * pi * random.random()
         body_def.position = (config.creation_distance *
