@@ -51,11 +51,11 @@ def parse_dictionary():
     return Dictionary(read_words())
 
 def unpickle_dictionary():
-    with open('nucleus.pickle') as file_obj:
+    with open(config.pickle_file) as file_obj:
         return pickle.load(file_obj)
 
 def pickle_dictionary(dictionary):
-    with open('nucleus.pickle', 'w') as file_obj:
+    with open(config.pickle_file, 'w') as file_obj:
         pickle.dump(dictionary, file_obj, pickle.HIGHEST_PROTOCOL)
 
 class MyWindow(pyglet.window.Window):
@@ -71,7 +71,8 @@ class MyWindow(pyglet.window.Window):
         self.selection = []
         self.batch = pyglet.graphics.Batch()
         self.score = 0
-        self.score_label = pyglet.text.Label('SCORE %d' % self.score,
+        self.score_label = pyglet.text.Label(u'%s %d' %
+                                             (config.score_label, self.score),
                                              font_size=self.scale, bold=True)
 
         try:
@@ -82,9 +83,10 @@ class MyWindow(pyglet.window.Window):
 
         self.screen_time = 0.
         self.world_time = 0.
-        self.time_label = pyglet.text.Label('TIME ' + self.format_time(),
-                                             font_size=self.scale, bold=True,
-                                             anchor_x='right')
+        self.time_label = pyglet.text.Label('%s %s' %
+                                            (config.time_label, self.format_time()),
+                                            font_size=self.scale, bold=True,
+                                            anchor_x='right')
 
         self.world = self._create_world()
         self.boundary_listener = MyBoundaryListener()
@@ -94,12 +96,14 @@ class MyWindow(pyglet.window.Window):
 
     def _create_world(self):
         aabb = b2AABB()
-        aabb.lowerBound = -100., -100.
-        aabb.upperBound = 100., 100.
+        aabb.lowerBound = -config.world_radius, -config.world_radius
+        aabb.upperBound = config.world_radius, config.world_radius
         return b2World(aabb, (0., 0.), True)
 
     def format_time(self):
-        return '%d:%02d' % divmod(int(config.time - self.world_time), 60)
+        seconds = max(int(config.time - self.world_time), 0)
+        minutes, seconds = divmod(seconds, 60)
+        return '%d:%02d' % (minutes, seconds)
 
     def on_key_press(self, symbol, modifiers):
         symbol_string = pyglet.window.key.symbol_string(symbol)
@@ -130,7 +134,8 @@ class MyWindow(pyglet.window.Window):
                 for actor in actors[:multiplier]:
                     self._destroy_letter(actor)
                 self.score += multiplier * score
-                self.score_label.text = 'SCORE %d' % self.score
+                self.score_label.text = u'%s %d' % (config.score_label,
+                                                    self.score)
             else:
                 del self.selection[:]
         else:
@@ -268,9 +273,10 @@ class MyWindow(pyglet.window.Window):
                 self._destroy_letter(actor)
             self.boundary_listener.violators.clear()
         if self.world_time < config.time:
-            self.time_label.text = 'TIME ' + self.format_time()
+            self.time_label.text = '%s %s' % (config.time_label,
+                                              self.format_time())
         else:
-            print 'SCORE %d' % self.score
+            print u'%s %d' % (config.score_label, self.score)
             self.on_close()
 
     def _destroy_letter(self, actor):
