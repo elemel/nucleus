@@ -25,11 +25,13 @@ view_height = 25.
 # Gameplay.
 letter_count = 46
 hint = False
-time = 90.0
+time_limit = 30.
 creation_distance = 30.
-creation_interval = 0.1
+creation_interval = 0.2
 min_radius = 0.8
 max_radius = 1.2
+levels = [10, 30, 60, 100, 150, 210, 280, 360, 450, 550, 660, 780, 910, 1050]
+extra_time = 30.
 
 # Dictionary.
 dictionary_file = '/usr/share/dict/swedish'
@@ -55,5 +57,7 @@ error_color = 255, 0, 0
 destroy_color = 255, 0, 255
 
 # Labels.
+level_label = u'NIVÅ'
+letters_label = u'BOKSTÄVER'
 score_label = u'POÄNG'
 time_label = u'TID'

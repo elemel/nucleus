@@ -96,10 +96,23 @@ class MyWindow(pyglet.window.Window):
 
         self.screen_time = 0.
         self.world_time = 0.
-        self.time_label = pyglet.text.Label('%s %s' %
-                                            (config.time_label, self.format_time()),
-                                            font_size=self.scale, bold=True,
+        self.time_label = pyglet.text.Label(font_size=self.scale, bold=True,
                                             anchor_x='right')
+
+        self.level = 1
+        self.time_limit = config.time_limit
+        self.level_label = pyglet.text.Label('%s %d' %
+                                            (config.level_label, self.level),
+                                            font_size=self.scale, bold=True,
+                                            anchor_x='left', anchor_y='top')
+
+        self.letter_count = 0
+        self.letters_label = pyglet.text.Label('%s %d' %
+                                               (config.letters_label,
+                                                self.letter_count),
+                                               font_size=self.scale, bold=True,
+                                               anchor_x='right',
+                                               anchor_y='top')
 
         self.world = self._create_world()
         self.boundary_listener = MyBoundaryListener()
@@ -118,7 +131,7 @@ class MyWindow(pyglet.window.Window):
         return b2World(aabb, (0., 0.), True)
 
     def format_time(self):
-        seconds = max(int(config.time - self.world_time), 0)
+        seconds = max(int(self.time_limit - self.world_time), 0)
         minutes, seconds = divmod(seconds, 60)
         return '%d:%02d' % (minutes, seconds)
 
@@ -138,6 +151,7 @@ class MyWindow(pyglet.window.Window):
                 print word
                 multiplier = 1
                 score = len(self.selection)
+                self.letter_count += len(self.selection)
                 for i, actor in enumerate(self.selection):
                     for other in self.selection[i + 1:]:
                         if ((actor.body.GetWorldCenter() -
@@ -147,8 +161,6 @@ class MyWindow(pyglet.window.Window):
                 for actor in list(self.selection):
                     self._clear_letter(actor)
                 self.score += multiplier * score
-                self.score_label.text = u'%s %d' % (config.score_label,
-                                                    self.score)
             else:
                 del self.selection[:]
         else:
@@ -230,10 +242,43 @@ class MyWindow(pyglet.window.Window):
                 if config.rotate_letters:
                     actor.sprite.rotation = -body.angle * 180. / pi
         self.batch.draw()
+        self._draw_level_label()
+        self._draw_letters_label()
+        self._draw_score_label()
+        self._draw_time_label()
         if config.debug_draw:
             self._debug_draw()
+
+    def _draw_level_label(self):
+        self.level_label.text = u'%s %d' % (config.level_label, self.level)
+        self.level_label.x = self.scale / 2.
+        self.level_label.y = self.height - self.scale / 2.
+        self.level_label.draw()
+
+    def _draw_letters_label(self):
+        if self.level <= len(config.levels):
+            self.letters_label.text = u'%s %d/%d' % (config.letters_label,
+                                                     self.letter_count,
+                                                     config.levels[self.level -
+                                                                   1])
+        else:
+            self.letters_label.text = u'%s %d' % (config.letters_label,
+                                                  self.letter_count)
+        self.letters_label.x = self.width - self.scale / 2.
+        self.letters_label.y = self.height - self.scale / 2.
+        self.letters_label.draw()
+
+    def _draw_score_label(self):
+        self.score_label.text = u'%s %d' % (config.score_label, self.score)
+        self.score_label.x = self.scale / 2.
+        self.score_label.y = self.scale / 2.
         self.score_label.draw()
-        self.time_label.x = self.width
+
+    def _draw_time_label(self):
+        self.time_label.text = '%s %s' % (config.time_label,
+                                          self.format_time())        
+        self.time_label.x = self.width - self.scale / 2.
+        self.time_label.y = self.scale / 2.
         self.time_label.draw()
 
     def _create_circle_vertex_list(self,
@@ -279,6 +324,14 @@ class MyWindow(pyglet.window.Window):
         self.screen_time += dt
         while self.world_time + config.time_step <= self.screen_time:
             self.world_time += config.time_step
+            if self.world_time > self.time_limit:
+                self.closing = True
+                self.clear_letters()
+            elif (self.level <= len(config.levels) and
+                  self.letter_count >= config.levels[self.level - 1]):
+                self.level += 1
+                self.time_limit += config.extra_time
+                self.clear_letters()
             for body in self.world.bodyList:
                 actor = body.userData
                 if actor is not None:
@@ -296,13 +349,10 @@ class MyWindow(pyglet.window.Window):
             for actor in self.boundary_listener.violators:
                 self._destroy_actor(actor)
             self.boundary_listener.violators.clear()
-        self.time_label.text = '%s %s' % (config.time_label,
-                                          self.format_time())        
         if self.closing and not self.actors:
             self.on_close()
 
-    def clear_letters(self, dt):
-        self.closing = True
+    def clear_letters(self):
         for body in self.world.bodyList:
             actor = body.userData
             if actor is not None:
@@ -343,7 +393,6 @@ def main():
     pyglet.clock.schedule_interval(window.step, config.time_step)
     pyglet.clock.schedule_interval(window.create_letter,
                                    config.creation_interval)
-    pyglet.clock.schedule_once(window.clear_letters, config.time)
     pyglet.app.run()
     
 if __name__ == '__main__':
