@@ -84,9 +84,6 @@ class MyWindow(pyglet.window.Window):
         self.selection = []
         self.batch = pyglet.graphics.Batch()
         self.score = 0
-        self.score_label = pyglet.text.Label(u'%s %d' %
-                                             (config.score_label, self.score),
-                                             font_size=self.scale, bold=True)
 
         try:
             self.dictionary = Dictionary.unpickle()
@@ -96,23 +93,11 @@ class MyWindow(pyglet.window.Window):
 
         self.screen_time = 0.
         self.world_time = 0.
-        self.time_label = pyglet.text.Label(font_size=self.scale, bold=True,
-                                            anchor_x='right')
 
         self.level = 1
         self.time_limit = config.time_limit
-        self.level_label = pyglet.text.Label('%s %d' %
-                                            (config.level_label, self.level),
-                                            font_size=self.scale, bold=True,
-                                            anchor_x='left', anchor_y='top')
 
         self.letter_count = 0
-        self.letters_label = pyglet.text.Label('%s %d' %
-                                               (config.letters_label,
-                                                self.letter_count),
-                                               font_size=self.scale, bold=True,
-                                               anchor_x='right',
-                                               anchor_y='top')
 
         self.world = self._create_world()
         self.boundary_listener = MyBoundaryListener()
@@ -123,6 +108,22 @@ class MyWindow(pyglet.window.Window):
         clear_color = [float(c) / 255. for c in config.background_color]
         clear_color.append(0.)
         glClearColor(*clear_color)
+        
+        self._init_labels()
+
+    def _init_labels(self):
+        self.level_label = pyglet.text.Label(font_size=self.scale, bold=True,
+                                             anchor_x='left', anchor_y='top',
+                                             batch=self.batch)
+        self.letters_label = pyglet.text.Label(font_size=self.scale, bold=True,
+                                               anchor_x='right',
+                                               anchor_y='top',
+                                               batch=self.batch)
+        self.score_label = pyglet.text.Label(font_size=self.scale, bold=True,
+                                             batch=self.batch)
+        self.time_label = pyglet.text.Label(font_size=self.scale, bold=True,
+                                            anchor_x='right', batch=self.batch)
+        self._update_labels()
 
     def _create_world(self):
         aabb = b2AABB()
@@ -212,26 +213,34 @@ class MyWindow(pyglet.window.Window):
 
     def on_draw(self):
         self.clear()
-        word = u''.join(a.letter for a in self.selection)
-        next_letters = self.dictionary.complete(word)
-        next_actors = set()
-        for letter in next_letters:
-            actors = self.letter_sets[letter] - set(self.selection)
-            if actors:
-                next_actors.add(min(actors, key=self.get_actor_key))
+        self._update_sprites()
+        self._update_labels()
+        self.batch.draw()
+        if config.debug_draw:
+            self._debug_draw()
+
+    def _update_sprites(self):
+        prefix = u''.join(a.letter for a in self.selection)
+        hint_letters = self.dictionary.complete(prefix)
+        hint_actors = set()
+        if config.hint:
+            for letter in next_letters:
+                actors = self.letter_sets[letter] - set(self.selection)
+                if actors:
+                    hint_actors.add(min(actors, key=self.get_actor_key))
         for body in self.world.bodyList:
             actor = body.userData
             if actor is not None:
                 if actor.letter is None:
                     actor.sprite.color = config.destroy_color
                 elif actor in self.selection:
-                    if u'' in next_letters:
+                    if u'' in hint_letters:
                         actor.sprite.color = config.word_color
-                    elif next_letters:
+                    elif hint_letters:
                         actor.sprite.color = config.prefix_color
                     else:
                         actor.sprite.color = config.error_color
-                elif config.hint and actor in next_actors:
+                elif actor in hint_actors:
                     actor.sprite.color = config.hint_color
                 else:
                     actor.sprite.color = config.color
@@ -241,21 +250,19 @@ class MyWindow(pyglet.window.Window):
                 actor.sprite.position = screen_x, screen_y
                 if config.rotate_letters:
                     actor.sprite.rotation = -body.angle * 180. / pi
-        self.batch.draw()
-        self._draw_level_label()
-        self._draw_letters_label()
-        self._draw_score_label()
-        self._draw_time_label()
-        if config.debug_draw:
-            self._debug_draw()
 
-    def _draw_level_label(self):
+    def _update_labels(self):
+        self._update_level_label()
+        self._update_letters_label()
+        self._update_score_label()
+        self._update_time_label()
+
+    def _update_level_label(self):
         self.level_label.text = u'%s %d' % (config.level_label, self.level)
         self.level_label.x = self.scale / 2.
         self.level_label.y = self.height - self.scale / 2.
-        self.level_label.draw()
 
-    def _draw_letters_label(self):
+    def _update_letters_label(self):
         if self.level <= len(config.levels):
             self.letters_label.text = u'%s %d/%d' % (config.letters_label,
                                                      self.letter_count,
@@ -266,20 +273,17 @@ class MyWindow(pyglet.window.Window):
                                                   self.letter_count)
         self.letters_label.x = self.width - self.scale / 2.
         self.letters_label.y = self.height - self.scale / 2.
-        self.letters_label.draw()
 
-    def _draw_score_label(self):
+    def _update_score_label(self):
         self.score_label.text = u'%s %d' % (config.score_label, self.score)
         self.score_label.x = self.scale / 2.
         self.score_label.y = self.scale / 2.
-        self.score_label.draw()
 
-    def _draw_time_label(self):
+    def _update_time_label(self):
         self.time_label.text = '%s %s' % (config.time_label,
                                           self.format_time())        
         self.time_label.x = self.width - self.scale / 2.
         self.time_label.y = self.scale / 2.
-        self.time_label.draw()
 
     def _create_circle_vertex_list(self,
                                    vertex_count=config.circle_vertex_count):
