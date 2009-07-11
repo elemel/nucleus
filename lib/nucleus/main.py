@@ -74,7 +74,25 @@ class MyWindow(pyglet.window.Window):
         super(MyWindow, self).__init__(**kwargs)
         if self.fullscreen:
             self.set_exclusive_mouse()
-        self.my_screen = GameScreen(self)
+
+        self.scale = self.height / config.view_height
+        self.font = pyglet.font.load(name=config.font_name,
+                                     size=(self.scale * config.font_scale),
+                                     bold=config.font_bold)
+
+        try:
+            self.dictionary = Dictionary.unpickle()
+        except IOError:
+            self.dictionary = Dictionary.parse()
+            self.dictionary.pickle()
+
+        self._init_gl()
+        self.my_screen = TitleScreen(self)
+
+    def _init_gl(self):
+        clear_color = [float(c) / 255. for c in config.background_color]
+        clear_color.append(0.)
+        glClearColor(*clear_color)
 
     def on_draw(self):
         self.my_screen.on_draw()
@@ -82,25 +100,51 @@ class MyWindow(pyglet.window.Window):
     def on_key_press(self, symbol, modifiers):
         self.my_screen.on_key_press(symbol, modifiers)
 
+class TitleScreen(object):
+    def __init__(self, window):
+        self.window = window
+        self.batch = pyglet.graphics.Batch()
+        self._init_labels()
+
+    def _init_labels(self):
+        self.title_label = pyglet.text.Label('Nucleus',
+                                             font_size=(self.window.scale *
+                                                        1.5),
+                                             bold=True,
+                                             x=(self.window.width // 2),
+                                             y=(self.window.height * 2 // 3),
+                                             anchor_x='center',
+                                             anchor_y='center',
+                                             batch=self.batch)
+        self.instr_label = pyglet.text.Label(config.instr_label,
+                                             font_size=(self.window.scale /
+                                                        1.5),
+                                             bold=True,
+                                             x=(self.window.width // 2),
+                                             y=(self.window.height // 3),
+                                             anchor_x='center',
+                                             anchor_y='center',
+                                             batch=self.batch)
+
+    def on_draw(self):
+        self.window.clear()
+        self.batch.draw()
+
+    def on_key_press(self, symbol, modifiers):
+        if symbol == pyglet.window.key.ESCAPE:
+            self.window.on_close()
+        if symbol in (pyglet.window.key.SPACE, pyglet.window.key.ENTER):
+            self.window.my_screen = GameScreen(self.window)
+
 class GameScreen(object):
     def __init__(self, window):
         self.window = window
         self.closing = False
-        self.scale = self.window.height / config.view_height
-        self.font = pyglet.font.load(name=config.font_name,
-                                     size=(self.scale * config.font_scale),
-                                     bold=config.font_bold)
         self.actors = set()
         self.letter_sets = defaultdict(set)
         self.selection = []
         self.batch = pyglet.graphics.Batch()
         self.score = 0
-
-        try:
-            self.dictionary = Dictionary.unpickle()
-        except IOError:
-            self.dictionary = Dictionary.parse()
-            self.dictionary.pickle()
 
         self.screen_time = 0.
         self.world_time = 0.
@@ -116,10 +160,6 @@ class GameScreen(object):
 
         self.circle_vertex_list = self._create_circle_vertex_list()
 
-        clear_color = [float(c) / 255. for c in config.background_color]
-        clear_color.append(0.)
-        glClearColor(*clear_color)
-        
         self._init_labels()
 
         pyglet.clock.schedule_interval(self.step, config.time_step)
@@ -129,19 +169,22 @@ class GameScreen(object):
     def close(self):
         pyglet.clock.unschedule(self.step)
         pyglet.clock.unschedule(self.create_letter)
+        self.window.my_screen = TitleScreen(self.window)
 
     def _init_labels(self):
-        self.level_label = pyglet.text.Label(font_size=self.scale, bold=True,
+        font_size = self.window.scale / 1.5
+        self.level_label = pyglet.text.Label(font_size=font_size, bold=True,
                                              anchor_x='left', anchor_y='top',
                                              batch=self.batch)
-        self.letters_label = pyglet.text.Label(font_size=self.scale, bold=True,
+        self.letters_label = pyglet.text.Label(font_size=font_size, bold=True,
                                                anchor_x='right',
                                                anchor_y='top',
                                                batch=self.batch)
-        self.score_label = pyglet.text.Label(font_size=self.scale, bold=True,
+        self.score_label = pyglet.text.Label(font_size=font_size, bold=True,
                                              batch=self.batch)
-        self.time_label = pyglet.text.Label(font_size=self.scale, bold=True,
-                                            anchor_x='right', batch=self.batch)
+        self.time_label = pyglet.text.Label(font_size=font_size, bold=True,
+                                            anchor_x='right',
+                                            batch=self.batch)
         self._update_labels()
 
     def _create_world(self):
@@ -161,13 +204,13 @@ class GameScreen(object):
             user_key = int(symbol_string[9:-1], 16)
             symbol_string = config.user_keys.get(user_key, symbol_string)
         if symbol == pyglet.window.key.ESCAPE:
-            self.window.on_close()
+            self.close()
         elif symbol == pyglet.window.key.BACKSPACE:
             if self.selection:
                 self.selection.pop()
         elif symbol == pyglet.window.key.ENTER:
             word = u''.join(a.letter for a in self.selection)
-            if u'' in self.dictionary.complete(word):
+            if u'' in self.window.dictionary.complete(word):
                 print word
                 multiplier = 1
                 score = len(self.selection)
@@ -202,7 +245,7 @@ class GameScreen(object):
         if self.closing or letter_count >= config.letter_count:
             return
 
-        letter = self.dictionary.random_letter()
+        letter = self.window.dictionary.random_letter()
         body_def = b2BodyDef()
         creation_angle = 2. * pi * random.random()
         body_def.position = (config.creation_distance *
@@ -218,7 +261,7 @@ class GameScreen(object):
         shape_def.friction = config.friction
         body.CreateShape(shape_def)
         body.SetMassFromShapes()
-        glyph = self.font.get_glyphs(letter)[0]
+        glyph = self.window.font.get_glyphs(letter)[0]
         glyph.anchor_x = glyph.width // 2
         glyph.anchor_y = glyph.height // 2
         sprite = pyglet.sprite.Sprite(glyph, batch=self.batch,
@@ -240,7 +283,7 @@ class GameScreen(object):
 
     def _update_sprites(self):
         prefix = u''.join(a.letter for a in self.selection)
-        hint_letters = self.dictionary.complete(prefix)
+        hint_letters = self.window.dictionary.complete(prefix)
         hint_actors = set()
         if config.hint:
             for letter in next_letters:
@@ -264,8 +307,9 @@ class GameScreen(object):
                 else:
                     actor.sprite.color = config.color
                 world_x, world_y = body.position.tuple()
-                screen_x = world_x * self.scale + self.window.width // 2
-                screen_y = world_y * self.scale + self.window.height // 2
+                screen_x = world_x * self.window.scale + self.window.width // 2
+                screen_y = (world_y * self.window.scale +
+                            self.window.height // 2)
                 actor.sprite.position = screen_x, screen_y
                 if config.rotate_letters:
                     actor.sprite.rotation = -body.angle * 180. / pi
@@ -278,8 +322,8 @@ class GameScreen(object):
 
     def _update_level_label(self):
         self.level_label.text = u'%s %d' % (config.level_label, self.level)
-        self.level_label.x = self.scale / 2.
-        self.level_label.y = self.window.height - self.scale / 2.
+        self.level_label.x = self.window.scale / 2.
+        self.level_label.y = self.window.height - self.window.scale / 2.
 
     def _update_letters_label(self):
         if self.level <= len(config.levels):
@@ -290,19 +334,19 @@ class GameScreen(object):
         else:
             self.letters_label.text = u'%s %d' % (config.letters_label,
                                                   self.letter_count)
-        self.letters_label.x = self.window.width - self.scale / 2.
-        self.letters_label.y = self.window.height - self.scale / 2.
+        self.letters_label.x = self.window.width - self.window.scale / 2.
+        self.letters_label.y = self.window.height - self.window.scale / 2.
 
     def _update_score_label(self):
         self.score_label.text = u'%s %d' % (config.score_label, self.score)
-        self.score_label.x = self.scale / 2.
-        self.score_label.y = self.scale / 2.
+        self.score_label.x = self.window.scale / 2.
+        self.score_label.y = self.window.scale / 2.
 
     def _update_time_label(self):
         self.time_label.text = '%s %s' % (config.time_label,
                                           self.format_time())        
-        self.time_label.x = self.window.width - self.scale / 2.
-        self.time_label.y = self.scale / 2.
+        self.time_label.x = self.window.width - self.window.scale / 2.
+        self.time_label.y = self.window.scale / 2.
 
     def _create_circle_vertex_list(self,
                                    vertex_count=config.circle_vertex_count):
@@ -316,8 +360,9 @@ class GameScreen(object):
     def _debug_draw(self):
         glColor3ub(*config.debug_color)
         glPushMatrix()
-        glTranslatef(float(self.width // 2), float(self.height // 2), 0.)
-        glScalef(self.scale, self.scale, self.scale)
+        glTranslatef(float(self.window.width // 2),
+                     float(self.window.height // 2), 0.)
+        glScalef(self.window.scale, self.window.scale, self.window.scale)
         world_aabb = self.world.GetWorldAABB()
         min_x, min_y = world_aabb.lowerBound.tuple()
         max_x, max_y = world_aabb.upperBound.tuple()
@@ -373,7 +418,7 @@ class GameScreen(object):
                 self._destroy_actor(actor)
             self.boundary_listener.violators.clear()
         if self.closing and not self.actors:
-            self.window.on_close()
+            self.close()
 
     def clear_letters(self):
         for body in self.world.bodyList:
