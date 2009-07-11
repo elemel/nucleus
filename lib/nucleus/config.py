@@ -57,7 +57,7 @@ error_color = 255, 0, 0
 destroy_color = 255, 0, 255
 
 # Labels.
-level_label = u'NIVÅ'
-letters_label = u'BOKSTÄVER'
-score_label = u'POÄNG'
-time_label = u'TID'
+level_label = u'Nivå:'
+letters_label = u'Tecken:'
+score_label = u'Poäng:'
+time_label = u'Tid:'
