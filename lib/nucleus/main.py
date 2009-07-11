@@ -100,6 +100,9 @@ class MyWindow(pyglet.window.Window):
     def on_key_press(self, symbol, modifiers):
         self.my_screen.on_key_press(symbol, modifiers)
 
+    def on_text(self, text):
+        self.my_screen.on_text(text)
+
 class TitleScreen(object):
     def __init__(self, window):
         self.window = window
@@ -135,6 +138,9 @@ class TitleScreen(object):
             self.window.on_close()
         if symbol in (pyglet.window.key.SPACE, pyglet.window.key.ENTER):
             self.window.my_screen = GameScreen(self.window)
+
+    def on_text(self, text):
+        pass
 
 class GameScreen(object):
     def __init__(self, window):
@@ -199,10 +205,6 @@ class GameScreen(object):
         return '%d:%02d' % (minutes, seconds)
 
     def on_key_press(self, symbol, modifiers):
-        symbol_string = pyglet.window.key.symbol_string(symbol)
-        if symbol_string.startswith('user_key('):
-            user_key = int(symbol_string[9:-1], 16)
-            symbol_string = config.user_keys.get(user_key, symbol_string)
         if symbol == pyglet.window.key.ESCAPE:
             self.close()
         elif symbol == pyglet.window.key.BACKSPACE:
@@ -226,8 +228,10 @@ class GameScreen(object):
                 self.score += multiplier * score
             else:
                 del self.selection[:]
-        else:
-            actors = self.letter_sets[symbol_string] - set(self.selection)
+
+    def on_text(self, text):
+        for letter in text.upper():
+            actors = self.letter_sets[letter] - set(self.selection)
             if actors:
                 self.selection.append(min(actors, key=self.get_actor_key))
 

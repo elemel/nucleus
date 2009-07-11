@@ -44,9 +44,6 @@ font_name = None
 font_bold = True
 font_scale = 1.
 
-# Input.
-user_keys = {0x22: u'Å', 0x30: u'Ä', 0x2f: u'Ö'}
-
 # Colors.
 color = 255, 255, 255
 background_color = 0, 0, 0
