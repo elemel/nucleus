@@ -1,0 +1,15 @@
+Next Action
+
+- Case-insensitive input.
+- Find out more about international character input in Pyglet.
+- Faster draw.
+- Display messages in the center of the screen, e.g. Level X, Game Over.
+- Title/highscore screen.
+- Save highscore list.
+- Config file should be e.g. an INI file, not a Python script.
+- User config in ~/.nucleus overrides the default config.
+
+Someday/Maybe
+
+- Help screen.
+- Networked play -- Nuclei.
