@@ -80,8 +80,26 @@ class MyWindow(pyglet.window.Window):
         self.font = pyglet.font.load(name=config.font_name,
                                      size=(self.scale * config.font_scale),
                                      bold=config.font_bold)
+        self._init_highscores()
         self._init_gl()
         self.my_screen = TitleScreen(self)
+
+    def _init_highscores(self):
+        try:
+            with open(config.highscore_file) as file_obj:
+                self.highscores = pickle.load(file_obj)
+        except:
+            self.highscores = []
+            for score in (200, 400, 600, 800, 1000):
+                self.add_highscore(score, 'Nucleus', save=False)
+
+    def add_highscore(self, score, name='Player', save=True):
+        self.highscores.append((score, name))
+        self.highscores.sort(reverse=True)
+        self.highscores = self.highscores[:5]
+        if save:
+            with open(config.highscore_file, 'w') as file_obj:
+                pickle.dump(self.highscores, file_obj, pickle.HIGHEST_PROTOCOL)    
 
     def _init_gl(self):
         clear_color = [float(c) / 255. for c in config.background_color]
@@ -104,24 +122,43 @@ class TitleScreen(object):
         self._init_labels()
 
     def _init_labels(self):
-        self.title_label = pyglet.text.Label('Nucleus',
-                                             font_size=(self.window.scale *
-                                                        1.5),
-                                             bold=True,
-                                             x=(self.window.width // 2),
-                                             y=(self.window.height * 2 // 3),
-                                             anchor_x='center',
-                                             anchor_y='center',
-                                             batch=self.batch)
-        self.instr_label = pyglet.text.Label(config.instr_label,
-                                             font_size=(self.window.scale /
-                                                        1.5),
-                                             bold=True,
-                                             x=(self.window.width // 2),
-                                             y=(self.window.height // 3),
-                                             anchor_x='center',
-                                             anchor_y='center',
-                                             batch=self.batch)
+        pyglet.text.Label('Nucleus',
+                          font_size=(self.window.scale * 1.5),
+                          bold=True,
+                          x=(self.window.width // 2),
+                          y=(self.window.height * 0.8),
+                          anchor_x='center',
+                          anchor_y='center',
+                          batch=self.batch)
+
+        for i, entry in enumerate(self.window.highscores):
+            score, name = entry
+            y = self.window.height * 0.6 - i * 1.5 * self.window.scale
+            pyglet.text.Label(str(score),
+                              font_size=self.window.scale,
+                              bold=True,
+                              x=(self.window.width // 2) - self.window.scale,
+                              y=y,
+                              anchor_x='right',
+                              anchor_y='center',
+                              batch=self.batch)
+            pyglet.text.Label(name,
+                              font_size=self.window.scale,
+                              bold=True,
+                              x=(self.window.width // 2) + self.window.scale,
+                              y=y,
+                              anchor_x='left',
+                              anchor_y='center',
+                              batch=self.batch)
+
+        pyglet.text.Label(config.instr_label,
+                          font_size=(self.window.scale / 1.5),
+                          bold=True,
+                          x=(self.window.width // 2),
+                          y=(self.window.height * 0.2),
+                          anchor_x='center',
+                          anchor_y='center',
+                          batch=self.batch)
 
     def on_draw(self):
         self.window.clear()
@@ -416,6 +453,7 @@ class GameScreen(object):
                 self._destroy_actor(actor)
             self.boundary_listener.violators.clear()
         if self.closing and not self.actors:
+            self.window.add_highscore(self.score)
             self.close()
 
     def clear_letters(self):
