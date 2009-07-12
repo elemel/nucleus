@@ -16,6 +16,10 @@ import random
 # Monkey patch for subpixel option.
 pyglet.sprite.Sprite = sprite.Sprite
 
+# Translation hook.
+def _(phrase):
+    return phrase
+
 class Dictionary(object):
     def __init__(self, words):
         self.letter_tree = {}
@@ -126,38 +130,38 @@ class TitleScreen(object):
                           font_size=(self.window.scale * 1.5),
                           bold=True,
                           x=(self.window.width // 2),
-                          y=(self.window.height * 0.8),
+                          y=(self.window.height * 0.75),
                           anchor_x='center',
                           anchor_y='center',
                           batch=self.batch)
 
         for i, entry in enumerate(self.window.highscores):
             score, name = entry
-            y = self.window.height * 0.6 - i * 1.5 * self.window.scale
+            y = self.window.height * 0.5 - i * 1.5 * self.window.scale
             pyglet.text.Label(str(score),
                               font_size=self.window.scale,
-                              bold=True,
+                              bold=config.font_bold,
                               x=(self.window.width // 2) - self.window.scale,
                               y=y,
                               anchor_x='right',
-                              anchor_y='center',
+                              anchor_y='top',
                               batch=self.batch)
             pyglet.text.Label(name,
                               font_size=self.window.scale,
-                              bold=True,
+                              bold=config.font_bold,
                               x=(self.window.width // 2) + self.window.scale,
                               y=y,
                               anchor_x='left',
-                              anchor_y='center',
+                              anchor_y='top',
                               batch=self.batch)
 
-        pyglet.text.Label(config.instr_label,
+        pyglet.text.Label(_('Press Enter to play, or Escape to exit.'),
                           font_size=(self.window.scale / 1.5),
-                          bold=True,
+                          bold=config.font_bold,
                           x=(self.window.width // 2),
-                          y=(self.window.height * 0.2),
+                          y=(self.window.scale / 1.5),
                           anchor_x='center',
-                          anchor_y='center',
+                          anchor_y='bottom',
                           batch=self.batch)
 
     def on_draw(self):
@@ -210,16 +214,29 @@ class GameScreen(object):
 
     def _init_labels(self):
         font_size = self.window.scale / 1.5
-        self.level_label = pyglet.text.Label(font_size=font_size, bold=True,
-                                             anchor_x='left', anchor_y='top',
+        top = self.window.height - font_size
+        right = self.window.width - font_size
+        bottom = font_size
+        left = font_size
+        self.level_label = pyglet.text.Label(font_size=font_size,
+                                             bold=config.font_bold,
+                                             x=left, y=top,
+                                             anchor_x='left',
+                                             anchor_y='top',
                                              batch=self.batch)
-        self.letters_label = pyglet.text.Label(font_size=font_size, bold=True,
+        self.letters_label = pyglet.text.Label(font_size=font_size,
+                                               bold=config.font_bold,
+                                               x=right, y=top,
                                                anchor_x='right',
                                                anchor_y='top',
                                                batch=self.batch)
-        self.score_label = pyglet.text.Label(font_size=font_size, bold=True,
+        self.score_label = pyglet.text.Label(font_size=font_size,
+                                             bold=config.font_bold,
+                                             x=left, y=bottom,
                                              batch=self.batch)
-        self.time_label = pyglet.text.Label(font_size=font_size, bold=True,
+        self.time_label = pyglet.text.Label(font_size=font_size,
+                                            bold=config.font_bold,
+                                            x=right, y=bottom,
                                             anchor_x='right',
                                             batch=self.batch)
         self._update_labels()
@@ -350,38 +367,19 @@ class GameScreen(object):
                     actor.sprite.rotation = -body.angle * 180. / pi
 
     def _update_labels(self):
-        self._update_level_label()
+        self.level_label.text = u'%s: %d' % (_('Level'), self.level)
         self._update_letters_label()
-        self._update_score_label()
-        self._update_time_label()
-
-    def _update_level_label(self):
-        self.level_label.text = u'%s %d' % (config.level_label, self.level)
-        self.level_label.x = self.window.scale / 2.
-        self.level_label.y = self.window.height - self.window.scale / 2.
+        self.score_label.text = u'%s: %d' % (_('Score'), self.score)
+        self.time_label.text = '%s: %s' % (_('Time'),
+                                          self.format_time())
 
     def _update_letters_label(self):
         if self.level <= len(config.levels):
-            self.letters_label.text = u'%s %d/%d' % (config.letters_label,
-                                                     self.letter_count,
-                                                     config.levels[self.level -
-                                                                   1])
+            letters_text = '%d/%d' % (self.letter_count,
+                                      config.levels[self.level - 1])
         else:
-            self.letters_label.text = u'%s %d' % (config.letters_label,
-                                                  self.letter_count)
-        self.letters_label.x = self.window.width - self.window.scale / 2.
-        self.letters_label.y = self.window.height - self.window.scale / 2.
-
-    def _update_score_label(self):
-        self.score_label.text = u'%s %d' % (config.score_label, self.score)
-        self.score_label.x = self.window.scale / 2.
-        self.score_label.y = self.window.scale / 2.
-
-    def _update_time_label(self):
-        self.time_label.text = '%s %s' % (config.time_label,
-                                          self.format_time())        
-        self.time_label.x = self.window.width - self.window.scale / 2.
-        self.time_label.y = self.window.scale / 2.
+            letters_text = str(self.letter_count)
+        self.letters_label.text = u'%s: %s' % (_('Letters'), letters_text)
 
     def _create_circle_vertex_list(self,
                                    vertex_count=config.circle_vertex_count):
@@ -492,6 +490,7 @@ class Actor(object):
         self.sprite = sprite
         self.radius = radius
 
+# TODO: Replace with a loading screen.
 def load_dictionary():
     try:
         print 'Loading dictionary cache...'

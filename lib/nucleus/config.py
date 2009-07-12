@@ -34,9 +34,9 @@ levels = [10, 30, 60, 100, 150, 210, 280, 360, 450, 550, 660, 780, 910, 1050]
 extra_time = 30.
 
 # Data files.
-dictionary_file = '/usr/share/dict/swedish'
+dictionary_file = '/usr/share/dict/words'
 dictionary_encoding = 'ISO-8859-1'
-alphabet = u'ABCDEFGHIJKLMNOPQRSTUVWXYZÅÄÖ'
+alphabet = u'ABCDEFGHIJKLMNOPQRSTUVWXYZ'
 dictionary_cache = 'nucleus-dictionary.pickle'
 highscore_file = 'nucleus-highscore.pickle'
 
@@ -53,10 +53,3 @@ prefix_color = 255, 255, 0
 word_color = 0, 255, 0
 error_color = 255, 0, 0
 destroy_color = 255, 0, 255
-
-# Labels.
-level_label = u'Nivå:'
-letters_label = u'Tecken:'
-score_label = u'Poäng:'
-time_label = u'Tid:'
-instr_label = u'Tryck Enter för att spela, eller Escape för att avsluta'
