@@ -33,11 +33,12 @@ max_radius = 1.2
 levels = [10, 30, 60, 100, 150, 210, 280, 360, 450, 550, 660, 780, 910, 1050]
 extra_time = 30.
 
-# Dictionary.
+# Data files.
 dictionary_file = '/usr/share/dict/swedish'
 dictionary_encoding = 'ISO-8859-1'
 alphabet = u'ABCDEFGHIJKLMNOPQRSTUVWXYZÅÄÖ'
-pickle_file = 'nucleus.pickle'
+dictionary_cache = 'nucleus-dictionary.pickle'
+highscore_file = 'nucleus-highscore.pickle'
 
 # Font.
 font_name = None

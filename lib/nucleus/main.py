@@ -21,9 +21,9 @@ class Dictionary(object):
         self.letter_tree = {}
         self.letter_counts = defaultdict(int)
         for word in words:
-            self._add_word(word)
+            self.add_word(word)
 
-    def _add_word(self, word):
+    def add_word(self, word):
         tree = self.letter_tree
         for letter in word:
             self.letter_counts[letter] += 1
@@ -61,31 +61,25 @@ class Dictionary(object):
         return Dictionary(read_words())
 
     @staticmethod
-    def unpickle():
-        with open(config.pickle_file) as file_obj:
-            return pickle.load(file_obj)
+    def load_cache():
+        with open(config.dictionary_cache) as cache_file:
+            return pickle.load(cache_file)
 
-    def pickle(self):
-        with open(config.pickle_file, 'w') as file_obj:
-            pickle.dump(dictionary, file_obj, pickle.HIGHEST_PROTOCOL)
+    def save_cache(self):
+        with open(config.dictionary_cache, 'w') as cache_file:
+            pickle.dump(self, cache_file, pickle.HIGHEST_PROTOCOL)
 
 class MyWindow(pyglet.window.Window):
-    def __init__(self, **kwargs):
-        super(MyWindow, self).__init__(**kwargs)
+    def __init__(self, dictionary, **kwargs):
+        super(MyWindow, self).__init__(**kwargs)        
         if self.fullscreen:
             self.set_exclusive_mouse()
 
+        self.dictionary = dictionary
         self.scale = self.height / config.view_height
         self.font = pyglet.font.load(name=config.font_name,
                                      size=(self.scale * config.font_scale),
                                      bold=config.font_bold)
-
-        try:
-            self.dictionary = Dictionary.unpickle()
-        except IOError:
-            self.dictionary = Dictionary.parse()
-            self.dictionary.pickle()
-
         self._init_gl()
         self.my_screen = TitleScreen(self)
 
@@ -460,9 +454,22 @@ class Actor(object):
         self.sprite = sprite
         self.radius = radius
 
+def load_dictionary():
+    try:
+        print 'Loading dictionary cache...'
+        return Dictionary.load_cache()
+    except (EOFError, IOError):
+        print 'Could not load dictionary cache.'
+        print 'Parsing dictionary file...'
+        dictionary = Dictionary.parse()
+        print 'Saving dictionary cache...'
+        dictionary.save_cache()
+        return dictionary
+
 def main():
-    window = MyWindow(fullscreen=config.fullscreen)
+    dictionary = load_dictionary()
+    window = MyWindow(dictionary, fullscreen=config.fullscreen)
     pyglet.app.run()
-    
+
 if __name__ == '__main__':
     main()
