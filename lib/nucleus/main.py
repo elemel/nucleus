@@ -107,14 +107,19 @@ class MyWindow(pyglet.window.Window):
 
     def _init_gl(self):
         clear_color = [float(c) / 255. for c in config.background_color]
-        clear_color.append(0.)
+        clear_color.append(1.)
         glClearColor(*clear_color)
 
     def on_draw(self):
         self.my_screen.on_draw()
 
     def on_key_press(self, symbol, modifiers):
-        self.my_screen.on_key_press(symbol, modifiers)
+        if (symbol == pyglet.window.key.ENTER and
+            modifiers & pyglet.window.key.MOD_ALT):
+            color_buffer = pyglet.image.get_buffer_manager().get_color_buffer()
+            color_buffer.save('nucleus-screenshot.png')
+        else:
+            self.my_screen.on_key_press(symbol, modifiers)
 
     def on_text(self, text):
         self.my_screen.on_text(text)
