@@ -37,7 +37,8 @@ extra_time = 30.
 word_list_file = 'enable.txt'
 word_list_encoding = 'ASCII'
 alphabet = u'ABCDEFGHIJKLMNOPQRSTUVWXYZ'
-cache_word_list = True
+save_word_index = True
+save_highscores = True
 
 # Font.
 font_name = None
