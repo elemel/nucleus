@@ -34,11 +34,10 @@ levels = [10, 30, 60, 100, 150, 210, 280, 360, 450, 550, 660, 780, 910, 1050]
 extra_time = 30.
 
 # Data files.
-dictionary_file = '/usr/share/dict/words'
-dictionary_encoding = 'ISO-8859-1'
+word_list_file = 'enable.txt'
+word_list_encoding = 'ASCII'
 alphabet = u'ABCDEFGHIJKLMNOPQRSTUVWXYZ'
-dictionary_cache = 'nucleus-dictionary.pickle'
-highscore_file = 'nucleus-highscore.pickle'
+cache_word_list = True
 
 # Font.
 font_name = None

@@ -10,8 +10,10 @@ from collections import *
 from itertools import *
 from math import *
 from operator import attrgetter
+import os
 import cPickle as pickle
 import random
+import sys
 
 # Monkey patch for subpixel option.
 pyglet.sprite.Sprite = sprite.Sprite
@@ -20,7 +22,21 @@ pyglet.sprite.Sprite = sprite.Sprite
 def _(phrase):
     return phrase
 
-class Dictionary(object):
+def get_data_dir():
+    data_dir = os.environ.get('NUCLEUS_DATA_DIR')
+    if data_dir is not None:
+        return data_dir
+    data_dir = os.path.dirname(os.path.abspath(__file__))
+    while True:
+        new_data_dir = os.path.join(data_dir, 'data')
+        if os.path.exists(new_data_dir):
+            return new_data_dir
+        new_data_dir = os.path.dirname(data_dir)
+        if new_data_dir == data_dir:
+            return None
+        data_dir = new_data_dir
+
+class WordList(object):
     def __init__(self, words):
         self.letter_tree = {}
         self.letter_counts = defaultdict(int)
@@ -53,33 +69,33 @@ class Dictionary(object):
         return None
 
     @staticmethod
-    def parse():
+    def parse(path, encoding='ASCII'):
         def read_words():
             alphabet = set(config.alphabet)
-            with codecs.open(config.dictionary_file, 'r',
-                             config.dictionary_encoding) as file_obj:
+            with codecs.open(path, 'r', encoding) as file_obj:
                 for line in file_obj:
                     word = line.strip().upper()
-                    if not set(word) - alphabet:
+                    if word and not set(word) - alphabet:
                         yield word
-        return Dictionary(read_words())
+        return WordList(read_words())
 
     @staticmethod
-    def load_cache():
-        with open(config.dictionary_cache) as cache_file:
+    def load_cache(path):
+        with open(path) as cache_file:
             return pickle.load(cache_file)
 
-    def save_cache(self):
-        with open(config.dictionary_cache, 'w') as cache_file:
+    def save_cache(self, path):
+        with open(path, 'w') as cache_file:
             pickle.dump(self, cache_file, pickle.HIGHEST_PROTOCOL)
 
 class MyWindow(pyglet.window.Window):
-    def __init__(self, dictionary, **kwargs):
+    def __init__(self, word_list, highscore_path, **kwargs):
         super(MyWindow, self).__init__(**kwargs)        
         if self.fullscreen:
             self.set_exclusive_mouse()
 
-        self.dictionary = dictionary
+        self.word_list = word_list
+        self.highscore_path = highscore_path
         self.scale = self.height / config.view_height
         self.font = pyglet.font.load(name=config.font_name,
                                      size=(self.scale * config.font_scale),
@@ -90,8 +106,8 @@ class MyWindow(pyglet.window.Window):
 
     def _init_highscores(self):
         try:
-            with open(config.highscore_file) as file_obj:
-                self.highscores = pickle.load(file_obj)
+            with open(self.highscore_path) as highscore_file:
+                self.highscores = pickle.load(highscore_file)
         except:
             self.highscores = []
             for score in (200, 400, 600, 800, 1000):
@@ -102,8 +118,9 @@ class MyWindow(pyglet.window.Window):
         self.highscores.sort(reverse=True)
         self.highscores = self.highscores[:5]
         if save:
-            with open(config.highscore_file, 'w') as file_obj:
-                pickle.dump(self.highscores, file_obj, pickle.HIGHEST_PROTOCOL)    
+            with open(self.highscore_path, 'w') as highscore_file:
+                pickle.dump(self.highscores, highscore_file,
+                            pickle.HIGHEST_PROTOCOL)    
 
     def _init_gl(self):
         clear_color = [float(c) / 255. for c in config.background_color]
@@ -132,7 +149,7 @@ class TitleScreen(object):
 
     def _init_labels(self):
         pyglet.text.Label('Nucleus',
-                          font_size=(self.window.scale * 1.5),
+                          font_size=(self.window.scale * 1.5 ** 3),
                           bold=True,
                           x=(self.window.width // 2),
                           y=(self.window.height * 0.75),
@@ -265,7 +282,7 @@ class GameScreen(object):
                 self.selection.pop()
         elif symbol == pyglet.window.key.ENTER:
             word = u''.join(a.letter for a in self.selection)
-            if u'' in self.window.dictionary.complete(word):
+            if u'' in self.window.word_list.complete(word):
                 print word
                 multiplier = 1
                 score = len(self.selection)
@@ -302,7 +319,7 @@ class GameScreen(object):
         if self.closing or letter_count >= config.letter_count:
             return
 
-        letter = self.window.dictionary.random_letter()
+        letter = self.window.word_list.random_letter()
         body_def = b2BodyDef()
         creation_angle = 2. * pi * random.random()
         body_def.position = (config.creation_distance *
@@ -340,7 +357,7 @@ class GameScreen(object):
 
     def _update_sprites(self):
         prefix = u''.join(a.letter for a in self.selection)
-        hint_letters = self.window.dictionary.complete(prefix)
+        hint_letters = self.window.word_list.complete(prefix)
         hint_actors = set()
         if config.hint:
             for letter in next_letters:
@@ -496,21 +513,29 @@ class Actor(object):
         self.radius = radius
 
 # TODO: Replace with a loading screen.
-def load_dictionary():
-    try:
-        print 'Loading dictionary cache...'
-        return Dictionary.load_cache()
-    except (EOFError, IOError):
-        print 'Could not load dictionary cache.'
-        print 'Parsing dictionary file...'
-        dictionary = Dictionary.parse()
-        print 'Saving dictionary cache...'
-        dictionary.save_cache()
-        return dictionary
+def load_word_list(data_dir):
+    if config.cache_word_list:
+        cache_path = os.path.join(data_dir, 'word-list-cache.pickle')
+        if os.path.exists(cache_path):
+            print 'Loading word list from cache...'
+            return WordList.load_cache(cache_path)
+    word_list_path = os.path.join(data_dir, config.word_list_file)
+    print 'Parsing word list...'
+    word_list = WordList.parse(word_list_path, config.word_list_encoding)
+    if config.cache_word_list:
+        print 'Caching word list...'
+        word_list.save_cache(cache_path)
+    return word_list
 
 def main():
-    dictionary = load_dictionary()
-    window = MyWindow(dictionary, fullscreen=config.fullscreen)
+    data_dir = get_data_dir()
+    if data_dir is None:
+        sys.stderr.write('Cannot find Nucleus data. Please set environment '
+                         'variable NUCLEUS_DATA_DIR.\n')
+        sys.exit(1)
+    word_list = load_word_list(data_dir)
+    highscore_path = os.path.join(data_dir, 'highscore.pickle')
+    window = MyWindow(word_list, highscore_path, fullscreen=config.fullscreen)
     pyglet.app.run()
 
 if __name__ == '__main__':

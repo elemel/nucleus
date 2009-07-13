@@ -5,7 +5,7 @@ Next Action
 - Save highscore list.
 - Config file should be e.g. an INI file, not a Python script.
 - User config in ~/.nucleus overrides the default config.
-- Display loading screen while loading dictionary.
+- Display loading screen while loading word list.
 - English and Swedish localizations.
 
 Someday/Maybe
