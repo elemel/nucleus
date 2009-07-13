@@ -107,10 +107,10 @@ class MyWindow(pyglet.window.Window):
         self.my_screen = TitleScreen(self)
 
     def _init_highscores(self):
-        try:
+        if config.save_highscores and os.path.exists(self.highscores_path):
             with open(self.highscores_path) as highscores_file:
                 self.highscores = pickle.load(highscores_file)
-        except:
+        else:
             self.highscores = []
             for score in (200, 400, 600, 800, 1000):
                 self.add_highscore(score, 'Nucleus', save=False)
@@ -119,7 +119,7 @@ class MyWindow(pyglet.window.Window):
         self.highscores.append((score, name))
         self.highscores.sort(reverse=True)
         self.highscores = self.highscores[:5]
-        if save:
+        if save and config.save_highscores:
             with open(self.highscores_path, 'w') as highscores_file:
                 pickle.dump(self.highscores, highscores_file,
                             pickle.HIGHEST_PROTOCOL)
